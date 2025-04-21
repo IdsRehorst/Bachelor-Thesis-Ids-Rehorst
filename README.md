@@ -1,5 +1,5 @@
 # README #
-This github repo contains eveything needed for my bachelor thesis.
+This github repo contains everything needed for my bachelor thesis.
 
 ### How to build? ###
 * `git clone git@github.com:IdsRehorst/Bachelor-Thesis-Ids-Rehorst.git`
