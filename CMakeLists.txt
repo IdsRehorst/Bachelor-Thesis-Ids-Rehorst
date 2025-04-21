@@ -15,7 +15,7 @@ find_package(RACE REQUIRED CONFIG)
 find_package(OpenMP REQUIRED)
 
 # ---- Library -----------------------------------------------------------
-add_library(bachelor_thesis STATIC src/colorizer.cpp)
+add_library(bachelor_thesis STATIC src/colorizer.cpp src/mmio.cpp)
 
 # 1.  Add the RACE headers
 target_include_directories(bachelor_thesis
@@ -40,5 +40,5 @@ target_link_libraries(tri_solve PRIVATE bachelor_thesis)
 # 5.  Compiler warnings (after targets exist!)
 # ---------------------------------------------------------------------------
 include(cmake/cpp_flags.cmake)      # now it can “see” the targets
-enable_warnings(bachelor_thesis tri_solve)   # function defined in that file
+#enable_warnings(bachelor_thesis tri_solve)   # function defined in that file
 
