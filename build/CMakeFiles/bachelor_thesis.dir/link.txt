@@ -1,2 +1,0 @@
-/usr/bin/ar qc libbachelor_thesis.a CMakeFiles/bachelor_thesis.dir/src/colorizer.cpp.o
-/usr/bin/ranlib libbachelor_thesis.a

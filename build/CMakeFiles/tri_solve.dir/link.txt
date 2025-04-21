@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/tri_solve.dir/src/main.cpp.o -o tri_solve  -Wl,-rpath,/home/idsr/.local/race/lib/RACE:/home/idsr/RACE/build/hwloc-inst/lib libbachelor_thesis.a /home/idsr/.local/race/lib/RACE/libRACE.so -lpthread /home/idsr/RACE/build/hwloc-inst/lib/libhwloc.so /usr/lib/gcc/x86_64-linux-gnu/13/libgomp.so /usr/lib/x86_64-linux-gnu/libpthread.a 

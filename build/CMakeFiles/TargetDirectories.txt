@@ -1,4 +1,0 @@
-/home/idsr/bachelor_thesis/build/CMakeFiles/bachelor_thesis.dir
-/home/idsr/bachelor_thesis/build/CMakeFiles/tri_solve.dir
-/home/idsr/bachelor_thesis/build/CMakeFiles/edit_cache.dir
-/home/idsr/bachelor_thesis/build/CMakeFiles/rebuild_cache.dir
