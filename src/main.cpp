@@ -91,15 +91,50 @@ static void extractTriangle(CSR& A, bool lower)
     A.val.swap(newVal);
 }
 
-static void writePattern(const CSR& A,
-                         const int* perm, const std::string& fname)
+static void dumpPattern(const CSR& A,
+                        const int* rowPerm,          // NULL → identity
+                        const std::string& fname)
 {
     std::ofstream out(fname);
     for (int r = 0; r < A.n; ++r) {
-        int pr = perm ? perm[r] : r;              // apply permutation
+        int pr = rowPerm ? rowPerm[r] : r;           // permute row
         for (int p = A.rowPtr[r]; p < A.rowPtr[r+1]; ++p) {
-            int pc = perm ? perm[A.col[p]] : A.col[p];
-            out << pr << ' ' << pc << '\n';
+            int c = A.col[p];                        // keep original column
+            out << pr << ' ' << c << '\n';
+        }
+    }
+}
+
+/*---------------------------------------------------------------------------
+ *  permuteCSR – build B = P · A · Pᵀ so triangularity is preserved
+ *---------------------------------------------------------------------------*/
+static void permuteCSR(int n,
+                       const CSR& A,
+                       const int*   perm,          // newRow → oldRow
+                       const int*   invPerm,       // oldRow → newRow
+                       CSR& B)                     // output
+{
+    B.n = n;
+    B.rowPtr.assign(n + 1, 0);
+
+    /* count nnz per new row */
+    for (int newR = 0; newR < n; ++newR)
+        B.rowPtr[newR + 1] = A.rowPtr[perm[newR] + 1] - A.rowPtr[perm[newR]];
+
+    /* prefix sum */
+    for (int i = 0; i < n; ++i) B.rowPtr[i + 1] += B.rowPtr[i];
+
+    int nnz = B.rowPtr.back();
+    B.col.resize(nnz);
+    B.val.resize(nnz);
+
+    std::vector<int> cursor = B.rowPtr;
+    for (int newR = 0; newR < n; ++newR) {
+        int oldR = perm[newR];
+        for (int p = A.rowPtr[oldR]; p < A.rowPtr[oldR + 1]; ++p) {
+            int q       = cursor[newR]++;
+            B.col[q]    = invPerm[A.col[p]];   // relabel column
+            B.val[q]    = A.val[p];
         }
     }
 }
@@ -123,6 +158,7 @@ int main(int argc, char* argv[])
     std::cout << "Kept " << (lower ? "lower" : "upper")
               << " triangle; nnz=" << A.col.size() << '\n';
 
+    dumpPattern(A, /*perm*/ nullptr, "pattern_triangular.txt");
     /* --- call RACE ---------------------------------------------------- */
     RACE::Interface race(A.n, 1, RACE::ONE,
                          A.rowPtr.data(), A.col.data());
@@ -132,15 +168,17 @@ int main(int argc, char* argv[])
     }
 
     int* perm = nullptr;
+    int* inv  = nullptr;
     int  len  = 0;
-    race.getPerm(&perm, &len);
 
-    std::cout << "Stages: " << race.getMaxStageDepth()+1
-          << "   first 10 perm:";
-    for (int i = 0; i < std::min(10, len); ++i) std::cout << ' ' << perm[i];
-    std::cout << '\n';
-	
-    writePattern(A, perm, "pattern_after_race.txt");
+    race.getPerm(&perm,     &len);
+    race.getInvPerm(&inv,   &len);
+ 
+    /* --- build permuted matrix B --------------------------------------- */
+    CSR B;
+    permuteCSR(A.n, A, perm, inv, B);
 
+    /* dump in colour‑block row order, columns untouched (still triangular) */
+    dumpPattern(B, /*rowPerm*/ nullptr, "pattern_after_race.txt");
     return 0;
 }
