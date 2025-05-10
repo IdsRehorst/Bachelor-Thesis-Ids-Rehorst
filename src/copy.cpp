@@ -155,82 +155,95 @@ static void permuteCSR(int n,
     }
 }
 
-static void solveLowerTriBlockSlice(const CSR& B,
-                                    int r0,int r1,
-                                    const std::vector<double>& rhs,
-                                    double* dst)          // len = r1‑r0
+static void solveLowerTriBlockSlice(const CSR &B,
+                                    int r0, int r1,
+                                    const std::vector<double> &rhs,
+                                    double *x)                // slice base
 {
-    for(int row=r0; row<r1; ++row){
-        double s=rhs[row-r0], d=1.0;
-        for(int p=B.rowPtr[row]; p<B.rowPtr[row+1]; ++p){
-            int c=B.col[p];
-            if(c<row)            s-=B.val[p]*dst[c-r0];
-            else if(c==row && std::fabs(B.val[p])>1e-30) d=B.val[p];
+    for (int row = r0; row < r1; ++row) {         // strict <
+        double diag = 1.0;
+        double s    = rhs[row - r0];
+
+        for (int p = B.rowPtr[row]; p < B.rowPtr[row + 1]; ++p) {
+            int c = B.col[p];
+            if (c < row)              s    -= B.val[p] * x[c - r0];
+            else if (c == row && std::fabs(B.val[p]) > 1e-30)
+                                       diag  = B.val[p];
         }
-        dst[row-r0]=s/d;
+        x[row - r0] = s / diag;                    // write *inside* slice
     }
 }
 
-void bidiagSolveRedundant(const CSR& B,                // lower‑tri
-                          const std::vector<int>& ptr, // block ptr
-                          const std::vector<double>& b,
-                          std::vector<double>&       x)
+/*==========================================================================*
+ *  blockBiDiagSolve – redundant two‑phase algorithm with OpenMP tasks      *
+ *                                                                          *
+ *  Works for strictly lower‑triangular block–bidiagonal matrix B.          *
+ *  Upper‑triangular case falls back to the sequential loop (unchanged).    *
+ *==========================================================================*/
+static void blockBiDiagSolve(const CSR &B, bool lower,
+                             const std::vector<int> &ptr,
+                             const std::vector<double> &b,
+                             std::vector<double> &x)
 {
-    const int nb = static_cast<int>(ptr.size())-1;   // #blocks
-    x.assign(B.n,0.0);
+    /* ---------- quick upper‑triangular fallback (sequential) ------------- */
+    if (!lower) {
+        int n = B.n;  x.assign(n, 0.0);
+        for (int r = 0; r < n; ++r) {
+            double rhs = b[r], diag = 1.0;
+            for (int p = B.rowPtr[r]; p < B.rowPtr[r + 1]; ++p) {
+                int c = B.col[p];
+                if (c < r) rhs -= B.val[p] * x[c];
+                else if (c == r && std::fabs(B.val[p]) > 1e-30) diag = B.val[p];
+            }
+            x[r] = rhs / diag;
+        }
+        return;
+    }
 
-    /* provisional vectors and dependency tokens */
-    std::vector<std::vector<double>> xprime(nb);
-    std::vector<int> P(nb), F(nb);   // produced once → scalar tokens
-    int *tp=P.data(), *tf=F.data();
+    /* ---------- lower‑triangular block solve with redundant phase -------- */
+    const int nBlocks = static_cast<int>(ptr.size()) - 1;
+    const int n       = B.n;
+    x.assign(n, 0.0);
 
-#pragma omp parallel num_threads(2) default(none)   \
-                     shared(B,ptr,b,x,xprime,tp,tf,nb)
+#pragma omp parallel default(none) shared(B,ptr,b,x,nBlocks)
 {
 #pragma omp single
     {
-        /* -------- phase 1: all provisional tasks ------------------ */
-        for(int i=0;i<nb;++i){
-            int r0=ptr[i], r1=ptr[i+1];
-            xprime[i].resize(r1-r0);
+        std::vector<int> token(nBlocks);        // 1 dummy int per block
+int *tok = token.data();               // ← raw pointer (array base)
 
-            #pragma omp task depend(out:tp[i]) firstprivate(i,r0,r1)
-            {
-                std::vector<double> rhs(b.begin()+r0,b.begin()+r1);
-                solveLowerTriBlockSlice(B,r0,r1,rhs,xprime[i].data());
-            }
-        }
+/* -------------------- phase 1 : provisional -------------------------- */
+for (int blk = 0; blk < nBlocks; ++blk) {
+    int r0 = ptr[blk], r1 = ptr[blk+1];
+    #pragma omp task depend(out: tok[blk]) firstprivate(r0,r1,blk,tok)
+    {
+        std::vector<double> rhs(r1 - r0);
+        std::copy(b.begin()+r0, b.begin()+r1, rhs.begin());
+        solveLowerTriBlockSlice(B, r0, r1, rhs, x.data()+r0);
+    }
+}
 
-        /* -------- phase 2: pipeline of correctors ----------------- */
-        for(int i=0;i<nb;++i){
-            int r0=ptr[i], r1=ptr[i+1];
+/* -------------------- phase 2 : correctors --------------------------- */
+for (int blk = 1; blk < nBlocks; ++blk) {
+    int r0 = ptr[blk], r1 = ptr[blk+1];
+    #pragma omp task depend(in: tok[blk-1]) depend(out: tok[blk]) \
+                     firstprivate(r0,r1,blk,tok)
+    {
+        std::vector<double> rhs(r1 - r0);
+        std::copy(b.begin()+r0, b.begin()+r1, rhs.begin());
 
-            if(i==0){                         /* copy x₀ = x′₀ */
-                #pragma omp task depend(in:tp[0]) depend(out:tf[0]) \
-                                 firstprivate(r0,r1)
-                {
-                    std::copy(xprime[0].begin(),xprime[0].end(),
-                              x.begin()+r0);
-                }
-                continue;
-            }
+        for (int row = r0; row < r1; ++row)
+            for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p)
+                if (int c=B.col[p]; c < r0)
+                    rhs[row - r0] -= B.val[p] * x[c];
 
-            #pragma omp task depend(in: tp[i], tf[i-1]) \
-                            depend(out:tf[i])            \
-                            firstprivate(i,r0,r1)
-            {
-                std::vector<double> rhs(b.begin()+r0,b.begin()+r1);
+        solveLowerTriBlockSlice(B, r0, r1, rhs, x.data()+r0);
+    }
+}
 
-                /* subtract *all* earlier blocks (distance‑k safe) */
-                for(int row=r0; row<r1; ++row)
-                    for(int p=B.rowPtr[row]; p<B.rowPtr[row+1]; ++p)
-                        if(int c=B.col[p]; c<r0) rhs[row-r0]-=B.val[p]*x[c];
-
-                solveLowerTriBlockSlice(B,r0,r1,rhs,x.data()+r0);
-            }
-        }
-    } /* single → implicit taskwait */
-}   /* parallel */
+#pragma omp taskwait
+    } // single
+} // parallel
 }
 
 /* distance-1 level set (rows already contiguous) */
@@ -365,7 +378,7 @@ int main(int argc, char* argv[])
     std::vector<double> xPerm, xOur(A.n);
     
     double tOur = time_ms([&]{
-         bidiagSolveRedundant(B, stagePtr, bPerm, xPerm);
+         blockBiDiagSolve(B, lower, stagePtr, bPerm, xPerm);
     });
     for (int oldR = 0; oldR < A.n; ++oldR) xOur[oldR] = xPerm[inv[oldR]];
 
