@@ -34,51 +34,63 @@ double time_ms(Fn &&fn)
 
 int main(int argc, char* argv[])
 {
-    // First we check if user has inputted a matrix
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0]
-                  << " <matrix.mtx> [lower|upper]\n";
-        return 1;
+    std::vector<std::string> mats = {
+        "../matrices/3elt/3elt.mtx",
+        "../matrices/thermal2/thermal2.mtx",
+        "../matrices/spinSZ12.mm", /*…*/
+        "../matrices/crankseg_1/crankseg_1.mtx",
+        "../matrices/F1/F1.mtx",
+        "../matrices/Fault_63/Fault_63.mtx",
+        "../matrices/nlpkkt200/nlpkkt200.mtx",
+        "../matrices/offshore/offshore.mtx",
+        "../matrices/pwtk/pwtk.mtx",
+        "../matrices/Serena/Serena.mtx",
+        "../matrices/ship_003/ship_003.mtx",
+        "../matrices/thermal2/thermal2.mtx"
+      };
+
+    std::ofstream out("benchmark.csv");
+    out << "matrix,n,nnz,t_mkl_ms,t_tasks_ms,speedup\n";
+
+    for (auto &file : mats) {
+        sparsemat A;   A.load_matrix_market(file);
+        A.extract_triangle(true);
+        coloring col;  col.compute(A);
+        sparsemat B = col.permuted;
+        B.extract_triangle(true);
+
+        // extract blocks once
+        std::vector<sparsemat> Lblocks, Bblocks;
+        col.extract_blocks(B, Lblocks, Bblocks);
+
+        // prepare RHS
+        std::vector<double> bOrig(A.n,1.0), bPerm(A.n);
+        for(int i=0;i<A.n;++i) bPerm[i] = bOrig[col.perm[i]];
+
+        // warm-up
+        std::vector<double> x1, x2;
+        solver::mklTriSolve   (B,true,bPerm,x1);
+        solver::blockBiDiagSolveTasks(B,col.stagePtr,bPerm,x2);
+
+        // time both solvers K times
+        const int K = 5;
+        double t_mkl=0, t_tasks=0;
+        for(int i=0;i<K;++i) {
+            t_mkl   += time_ms([&]{ solver::mklTriSolve   (B,true,bPerm,x1); });
+            t_tasks += time_ms([&]{ solver::blockBiDiagSolveTasks(B,col.stagePtr,bPerm,x2); });
+        }
+        t_mkl   /= K;
+        t_tasks /= K;
+
+        double speedup = t_mkl / t_tasks;
+        out << file << ","
+            << A.n  << ","
+            << A.col.size() << ","
+            << t_mkl   << ","
+            << t_tasks << ","
+            << speedup << "\n";
+        std::cout << "Done " << file << "\n";
     }
-    const bool lower = (argc == 2) || (std::string(argv[2]) == "lower");
-    
-    /* --- Load the required matrix ------------------------------------ */
-    sparsemat A;
-    if (!A.load_matrix_market(argv[1])) return 1;
-    std::cout << "Loaded " << argv[1] << "  (n=" << A.n
-              << ", nnz=" << A.col.size() << ")\n";
-
-    A.dump_pattern( "pattern");
-    A.extract_triangle(true);
-    // compute colouring + permuted matrix + levels
-    coloring col;
-    col.compute(A);
-
-    sparsemat B = col.permuted;
-    B.extract_triangle(lower);
-
-    // solve the whole triangular matrix
-    std::vector<double> b(B.n, 1.0);
-
-    // 4) Solve with MKL
-    std::vector<double> xMkl;
-    solver::mklTriSolve(B, /*lower=*/true, b, xMkl);
-
-    // 5) Solve with block‐bidiagonal
-    std::vector<double> xBlk;
-    solver::blockBiDiagSolve(B, col.stagePtr, b, xBlk);
-
-    // 3) plain serial SpTRSV
-    std::vector<double> xSerial;
-    solver::serialSpTRSV(B, true, b, xSerial);
-
-    // 6) Compute and print the error
-    double err = solver::maxAbsError(xMkl, xBlk);
-    double errSerial = solver::maxAbsError(xMkl, xSerial);
-    std::cout << "Max |x_MKL – x_serial|   = " << errSerial << "\n\n";
-    std::cout << "Max |x_MKL – x_block| = " << err << "\n";
-
-    solver::printErrorSummary(xMkl, xBlk, 10);
 
     return 0;
 }
