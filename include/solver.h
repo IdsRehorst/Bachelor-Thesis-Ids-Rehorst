@@ -15,6 +15,14 @@ public:
                             const std::vector<double> &b,
                             std::vector<double> &x);
 
+    /// Redundant two-phase, task-based block-bidiagonal solve:
+    ///  Phase 1: x′ᵢ = Lᵢ⁻¹ bᵢ           (all blocks in parallel)
+    ///  Phase 2: xᵢ  = Lᵢ⁻¹ (bᵢ – Bᵢ x′ᵢ₋₁)  (all corrections in parallel)
+    static void blockBiDiagSolveTasks(const sparsemat&        B,
+                                      const std::vector<int>& stagePtr,
+                                      const std::vector<double>& b,
+                                      std::vector<double>&       x);
+
     /// Forward block‐bidiagonal solve by simple block‐substitution:
     ///   x1 = L1⁻¹ b1
     ///   xi = Li⁻¹ (bi − Bi xi-1),  i=2..k
@@ -48,16 +56,6 @@ public:
         const std::vector<double>& xA,
         const std::vector<double>& xB,
         size_t count = 5);
-
-    /// Solve via block‐bidiagonal forward‐substitution given pre-extracted blocks.
-    ///  • Lblocks[i] is the i-th diagonal block (size m_i×m_i)
-    ///  • Bblocks[i] is the i-th sub-diagonal block (size m_i×m_{i-1}), empty for i=0
-    static void blockBiDiagSolve(
-        const std::vector<sparsemat>& Lblocks,
-        const std::vector<sparsemat>& Bblocks,
-        const std::vector<int>&       stagePtr,
-        const std::vector<double>&    b,
-        std::vector<double>&          x);
 
     /// A plain, row‐by‐row sparse triangular solve (SpTRSV),
     /// avoids blocks and should match MKL exactly.
