@@ -71,12 +71,18 @@ find_package(MKL    REQUIRED)
 # ---------------------------------------------------------------------------
 #
 add_library(bachelor_thesis STATIC
-        src/colorizer.cpp
-        src/mmio.cpp)
+        src/mmio.cpp
+        src/sparsemat.cpp
+        include/sparsemat.h
+        src/coloring.cpp
+        include/coloring.h
+        src/solver.cpp
+        include/solver.h)
 
 target_link_libraries(bachelor_thesis PUBLIC
         RACE::race
-        OpenMP::OpenMP_CXX)
+        OpenMP::OpenMP_CXX
+        MKL::MKL)
 
 target_include_directories(bachelor_thesis PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
@@ -91,7 +97,7 @@ add_dependencies(bachelor_thesis race_external)
 # ---------------------------------------------------------------------------
 #
 add_executable(tri_solve src/main.cpp)
-target_link_libraries(tri_solve PRIVATE bachelor_thesis MKL::MKL)
+target_link_libraries(tri_solve PRIVATE bachelor_thesis)
 
 #
 # ---------------------------------------------------------------------------
