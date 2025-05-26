@@ -244,11 +244,13 @@ configure_file(${PROJECT_SOURCE_DIR}/race-config.cmake.in ${PROJECT_BINARY_DIR}/
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_BINARY_DIR}/include)
+include_directories(SYSTEM "$ENV{HWLOC_ROOT}/include")
 
 add_library(RACE ${SOURCES})
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
-    target_link_libraries(RACE PRIVATE tbb)
+    	find_package(TBB CONFIG REQUIRED) 
+	target_link_libraries(RACE PRIVATE TBB::tbb)
 endif()
 target_link_libraries(RACE PRIVATE ${HWLOC_LIBRARIES})
 
