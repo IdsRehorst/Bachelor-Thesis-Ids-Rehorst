@@ -1,6 +1,7 @@
 #include "../include/solver.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <mkl_spblas.h>
 #include <chrono>
@@ -283,6 +284,7 @@ void solver::serialSpTRSV(const sparsemat& B,
         x[r] = sum / diag;
     }
 }
+
 
 void solver::blockBiDiagSolveTasks(
     const sparsemat&           B,
