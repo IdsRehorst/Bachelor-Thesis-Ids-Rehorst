@@ -294,7 +294,7 @@ void solver::blockBiDiagSolveTasks(
     int N = B.n;
     x.assign(N, 0.0);
 
-    // Raw pointers for OpenMP array‐section dependences
+    // Raw pointers for OpenMP array‐section dependencies
     double       *xp = x.data();
     const double *bp = b.data();
 
