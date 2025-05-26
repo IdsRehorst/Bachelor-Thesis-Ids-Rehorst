@@ -244,10 +244,12 @@ configure_file(${PROJECT_SOURCE_DIR}/race-config.cmake.in ${PROJECT_BINARY_DIR}/
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_BINARY_DIR}/include)
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
-    link_libraries(tbb)
-endif()
+
 add_library(RACE ${SOURCES})
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
+    target_link_libraries(RACE PRIVATE tbb)
+endif()
 target_link_libraries(RACE PRIVATE ${HWLOC_LIBRARIES})
 
 #get_filename_component(HWLOC_LIB_PATH ${LIBHWLOC} DIRECTORY)
@@ -260,7 +262,7 @@ set(RACE_LIB_PATH ${CMAKE_INSTALL_PREFIX}/lib/RACE)
 #endif()
 
 if(BUILTIN_HWLOC)
-    target_link_libraries(RACE "${LIBHWLOC}")
+    target_link_libraries(RACE PRIVATE "${LIBHWLOC}")
     include_directories(SYSTEM "${HWLOC_INCLUDE_DIR}")
     add_dependencies(RACE hwloc)
 
