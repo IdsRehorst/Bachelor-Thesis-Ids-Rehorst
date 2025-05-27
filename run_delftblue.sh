@@ -10,6 +10,10 @@
 #SBATCH --mem=0
 #SBATCH --account=research-eemcs-diam
 
+module load intel/oneapi-all
+module load 2023r1-gcc11
+module load hwloc
+
 export OMP_PROC_BIND=true
 export OMP_PLACES=cores
 
