@@ -285,108 +285,104 @@ void solver::serialSpTRSV(const sparsemat& B,
     }
 }
 
-
-void solver::blockBiDiagSolveTasks(
-    const sparsemat&           B,
-    const std::vector<int>&    stagePtr,
-    const std::vector<double>& b,
-    std::vector<double>&       x)
+void solver::blockBiDiagSolveTasks(const sparsemat&           B,
+                                   const std::vector<int>&    stagePtr,
+                                   const std::vector<double>& b,
+                                   std::vector<double>&       x)
 {
-    int k = int(stagePtr.size()) - 1;
-    int N = B.n;
+    const int k = int(stagePtr.size()) - 1;
+    const int N = B.n;
     x.assign(N, 0.0);
 
-    // Raw pointers for OpenMP array‐section dependencies
+    /* raw pointers so that OpenMP array–section syntax works */
     double       *xp = x.data();
     const double *bp = b.data();
 
-    #pragma omp parallel default(none) \
-                         shared(B, stagePtr, bp, xp, k)
-    {
-      #pragma omp single
-      {
-        // ---------------- Phase 1: provisional solves ----------------
-        for (int i = 0; i < k; ++i) {
-          int r0 = stagePtr[i],
-              r1 = stagePtr[i+1];
-          #pragma omp task                             \
-            depend(out: xp[r0:r1])                     \
-            firstprivate(r0,r1)
-          {
-            int m = r1 - r0;
-            // private vectors per task
+#pragma omp parallel default(none) shared(B,stagePtr,bp,xp,k)
+{
+#pragma omp single
+{
+    /* ---------------- Phase 1 : provisional solves ---------------- */
+    for (int i = 0; i < k; ++i) {
+        const int r0 = stagePtr[i];
+        const int r1 = stagePtr[i+1];
+        const int m  = r1 - r0;                 /* block size            */
+
+        /* length in the array-section must be  r1-r0,  not the last index */
+#pragma omp task depend(out: xp[r0 : m]) firstprivate(r0,r1,m)
+        {
             std::vector<double> rhs(m), xi(m);
 
-            // build local RHS = b_i
+            /* RHS = b_i */
             for (int j = 0; j < m; ++j)
-              rhs[j] = bp[r0 + j];
+                rhs[j] = bp[r0 + j];
 
-            // forward-solve L_i · xhat = rhs
+            /* solve L_i · x̂ = rhs */
             for (int ii = 0; ii < m; ++ii) {
-              int row = r0 + ii;
-              double sum = rhs[ii], diag = 1.0;
-              for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
-                int c = B.col[p];
-                if      (c <  r0)           continue;           // skip B_i
-                else if (c <  row)   sum -= B.val[p] * xi[c - r0];
-                else if (c == row)   diag = B.val[p];
-              }
-              assert(std::abs(diag) > 1e-30);
-              xi[ii] = sum / diag;
-            }
+                int    row  = r0 + ii;
+                double sum  = rhs[ii];
+                double diag = 1.0;
 
-            // scatter provisional result
-            for (int j = 0; j < m; ++j)
-              xp[r0 + j] = xi[j];
-          }
-        }
-
-        // -------------- Phase 2: correction solves ----------------
-        for (int i = 1; i < k; ++i) {
-          int r0 = stagePtr[i],
-              r1 = stagePtr[i+1];
-          #pragma omp task                             \
-            depend(in:    xp[stagePtr[i-1]:stagePtr[i]]) \
-            depend(inout: xp[r0:r1])                     \
-            firstprivate(r0,r1)
-          {
-            int m = r1 - r0;
-            std::vector<double> rhs(m), xi(m);
-
-            // build corrected RHS = b_i – sum_{c<r0} B_{row,c} * x[c]
-            for (int ii = 0; ii < m; ++ii) {
-              int row = r0 + ii;
-              double sum = bp[row];
-              for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
-                int c = B.col[p];
-                if (c < r0) {
-                  sum -= B.val[p] * xp[c];
+                for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
+                    int c = B.col[p];
+                    if      (c <  r0) continue;            /* belongs to B_i   */
+                    else if (c <  row) sum  -= B.val[p] * xi[c - r0];
+                    else if (c == row) diag  = B.val[p];
                 }
-              }
-              rhs[ii] = sum;
+                assert(std::abs(diag) > 1e-30);
+                xi[ii] = sum / diag;
             }
 
-            // forward-solve L_i · x = rhs
-            for (int ii = 0; ii < m; ++ii) {
-              int row = r0 + ii;
-              double sum = rhs[ii], diag = 1.0;
-              for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
-                int c = B.col[p];
-                if      (c <  r0)           continue;           // already in rhs
-                else if (c <  row)   sum -= B.val[p] * xi[c - r0];
-                else if (c == row)   diag = B.val[p];
-              }
-              assert(std::abs(diag) > 1e-30);
-              xi[ii] = sum / diag;
-            }
-
-            // scatter corrected result
-            for (int j = 0; j < m; ++j)
-              xp[r0 + j] = xi[j];
-          }
+            /* write provisional result */
+            for (int j = 0; j < m; ++j) xp[r0 + j] = xi[j];
         }
+    }
 
-        // implicit taskwait at end of single
-      } // end single
-    } // end parallel
+    /* ---------------- Phase 2 : correction solves ----------------- */
+    for (int i = 1; i < k; ++i) {
+        const int r0 = stagePtr[i];
+        const int r1 = stagePtr[i+1];
+        const int m  = r1 - r0;
+
+#pragma omp task  depend(in:    xp[stagePtr[i-1] : stagePtr[i]-stagePtr[i-1]]) \
+                  depend(inout: xp[r0            : m])                          \
+                  firstprivate(r0,r1,m)
+        {
+            std::vector<double> rhs(m), xi(m);
+
+            /* RHS = b_i – B_i · x_{i-1} */
+            for (int ii = 0; ii < m; ++ii) {
+                int    row = r0 + ii;
+                double sum = bp[row];
+
+                for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
+                    int c = B.col[p];
+                    if (c < r0) sum -= B.val[p] * xp[c];
+                }
+                rhs[ii] = sum;
+            }
+
+            /* solve L_i · x = rhs */
+            for (int ii = 0; ii < m; ++ii) {
+                int    row  = r0 + ii;
+                double sum  = rhs[ii];
+                double diag = 1.0;
+
+                for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
+                    int c = B.col[p];
+                    if      (c <  r0) continue;            /* already in RHS   */
+                    else if (c <  row) sum  -= B.val[p] * xi[c - r0];
+                    else if (c == row) diag  = B.val[p];
+                }
+                assert(std::abs(diag) > 1e-30);
+                xi[ii] = sum / diag;
+            }
+
+            /* write corrected result */
+            for (int j = 0; j < m; ++j) xp[r0 + j] = xi[j];
+        }
+    }
+    /* implicit taskwait here */
+} /* single */
+} /* parallel */
 }
