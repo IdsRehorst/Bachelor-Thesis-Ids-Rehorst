@@ -19,7 +19,11 @@ void coloring::compute(sparsemat& A)
 {
     // 1) call RACE to get perm / invPerm
     RACE::Interface race(A.n, /*nthreads=*/1, RACE::ONE,
-                         A.rowPtr.data(), A.col.data());
+                         A.rowPtr.data(), A.col.data(),
+                         /*symm_hint*/false,
+                         /*SMT       */1,
+                         static_cast<RACE::PinMethod>(-1));
+
     if (race.RACEColor() != RACE_SUCCESS) {
         std::cerr << "RACEColor failed\n";
         std::exit(1);
