@@ -1,0 +1,188 @@
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.74x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 50
+Range = [0,4720], colRange = [0, 4720]
+0. Range:[0, 4720, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 4720, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 1275, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 1275, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[1275, 4720, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 3445, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)345.758ms
+MKL (without setup)0.1162ms
+MKL (without setup)0.078788ms
+MKL (without setup)0.076538ms
+MKL (without setup)0.07753ms
+MKL (without setup)0.080393ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.75x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+[33m[RACE] WARNING at createGraphFromCRS() <graph_SoA.cpp:169>: Graph is not connected or irreducible. For coloring this is necessary, however for matrix power kernels this will work[0m
+Done matrices/3elt/3elt.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 3262
+Range = [0,1228045], colRange = [0, 1228045]
+0. Range:[0, 1228045, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 1228045, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 1227229, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 1227229, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[1227229, 1228045, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 816, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)15.8552ms
+MKL (without setup)14.3231ms
+MKL (without setup)13.8978ms
+MKL (without setup)14.1437ms
+MKL (without setup)13.8863ms
+MKL (without setup)13.8585ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.77x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/thermal2/thermal2.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 19
+Range = [0,924], colRange = [0, 924]
+0. Range:[0, 924, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 924, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 420, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 420, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[420, 924, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 504, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)0.024357ms
+MKL (without setup)0.011416ms
+MKL (without setup)0.009598ms
+MKL (without setup)0.009424ms
+MKL (without setup)0.008732ms
+MKL (without setup)0.008581ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.99x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/spinSZ12.mm
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 23
+Range = [0,52804], colRange = [0, 52804]
+0. Range:[0, 52804, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 52804, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 30519, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 30519, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[30519, 52804, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 22285, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)5.45294ms
+MKL (without setup)5.69814ms
+MKL (without setup)5.44947ms
+MKL (without setup)5.2447ms
+MKL (without setup)5.19641ms
+MKL (without setup)5.17099ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.97x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/crankseg_1/crankseg_1.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 67
+Range = [0,343791], colRange = [0, 343791]
+0. Range:[0, 343791, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 343791, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 168696, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 168696, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[168696, 343791, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 175095, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)14.5641ms
+MKL (without setup)15.4802ms
+MKL (without setup)14.7716ms
+MKL (without setup)14.4519ms
+MKL (without setup)14.3947ms
+MKL (without setup)14.3921ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.96x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/F1/F1.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 71
+Range = [0,638802], colRange = [0, 638802]
+0. Range:[0, 638802, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 638802, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 256851, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 256851, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[256851, 638802, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 381951, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)19.633ms
+MKL (without setup)20.2605ms
+MKL (without setup)19.4662ms
+MKL (without setup)19.4075ms
+MKL (without setup)19.3059ms
+MKL (without setup)19.2763ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.93x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/Fault_639/Fault_639.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 203
+Range = [0,16240000], colRange = [0, 16240000]
+0. Range:[0, 16240000, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 16240000, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 2101305, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 2101305, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[2101305, 16240000, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 14138695, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)183.418ms
+MKL (without setup)164.666ms
+MKL (without setup)194.588ms
+MKL (without setup)166.341ms
+MKL (without setup)166.86ms
+MKL (without setup)167.752ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.88x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/nlpkkt200/nlpkkt200.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 38
+Range = [0,259789], colRange = [0, 259789]
+0. Range:[0, 259789, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 259789, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 31449, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 31449, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[31449, 259789, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 228340, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)4.19403ms
+MKL (without setup)4.12381ms
+MKL (without setup)4.05581ms
+MKL (without setup)4.01779ms
+MKL (without setup)4.0207ms
+MKL (without setup)4.00519ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.96x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/offshore/offshore.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 261
+Range = [0,217918], colRange = [0, 217918]
+0. Range:[0, 217918, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 217918, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 123013, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 123013, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[123013, 217918, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 94905, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)5.25836ms
+MKL (without setup)5.37626ms
+MKL (without setup)5.10222ms
+MKL (without setup)4.99636ms
+MKL (without setup)5.00088ms
+MKL (without setup)5.02288ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.96x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/pwtk/pwtk.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 58
+Range = [0,1391349], colRange = [0, 1391349]
+0. Range:[0, 1391349, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 1391349, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 396216, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 396216, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[396216, 1391349, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 995133, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)45.02ms
+MKL (without setup)46.9481ms
+MKL (without setup)44.1182ms
+MKL (without setup)46.5613ms
+MKL (without setup)45.9741ms
+MKL (without setup)45.5044ms
+[34m[RACE] INFO at makeSymmetricGraph() <graph.cpp:93>: Matrix does not have a symmetric pattern.[0m
+[35m[RACE] PERFWARNING at makeSymmetricGraph() <graph.cpp:138>: However, RACE internally added 1.97x extra non-zeros to convert the matrix to a symmetric pattern for computaiton of the permutation. There are better ways to do it, but we currently stick to this approach for simplicity.[0m
+Done matrices/Serena/Serena.mtx
+RACE_THREADS = 
+Efficiency Vector = 
+40.000000
+Total Level = 59
+Range = [0,121728], colRange = [0, 121728]
+0. Range:[0, 121728, ] Children:[1, 3, ], Parent: -1, nthreads: 1, idealNThreads:1, stage:0, subBLocks:1, effRow: 121728, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+1. Range:[0, 53445, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 53445, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+2. Range:[53445, 121728, ] Children:[], Parent: 0, nthreads: 1, idealNThreads:1, stage:1, subBLocks:1, effRow: 68283, reachedLimit: false, pinOrder = 0 funTime = 0.000000
+MKL (without setup)4.09339ms
+MKL (without setup)4.32169ms
+MKL (without setup)4.15985ms
+MKL (without setup)4.07677ms
+MKL (without setup)4.05087ms
+MKL (without setup)4.04397ms
+Done matrices/ship_003/ship_003.mtx
