@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <likwid.h>
 
 #include "coloring.h"
 
@@ -289,7 +290,7 @@ void solver::blockBiDiagSolveTasks(const sparsemat&           B,
                                    const std::vector<int>&    stagePtr,
                                    const std::vector<double>& b,
                                    std::vector<double>&       x)
-{
+{	
     const int k = int(stagePtr.size()) - 1;
     const int N = B.n;
     x.assign(N, 0.0);
@@ -300,6 +301,10 @@ void solver::blockBiDiagSolveTasks(const sparsemat&           B,
 
 #pragma omp parallel default(none) shared(B,stagePtr,bp,xp,k)
 {
+	// Needed because otherwise we only get insight in one thread
+        LIKWID_MARKER_THREADINIT;
+	// Init Likwid marker for measuring perfomance
+        LIKWID_MARKER_START("sptrsv");
 #pragma omp single
 {
     /* ---------------- Phase 1 : provisional solves ---------------- */
@@ -384,5 +389,6 @@ void solver::blockBiDiagSolveTasks(const sparsemat&           B,
     }
     /* implicit taskwait here */
 } /* single */
+LIKWID_MARKER_STOP("sptrsv");
 } /* parallel */
 }

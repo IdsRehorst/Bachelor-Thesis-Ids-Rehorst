@@ -10,7 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
-
+#include <likwid.h>
 #include <omp.h>
 #include <RACE/interface.h>
 
@@ -34,18 +34,22 @@ double time_ms(Fn &&fn)
 
 int main(int argc, char* argv[])
 {
+
+    // Initialise Likwid marker
+    LIKWID_MARKER_INIT;
+
     std::vector<std::string> mats = {
-        "../matrices/3elt/3elt.mtx",
-        "../matrices/thermal2/thermal2.mtx",
-        "../matrices/spinSZ12.mm", /*…*/
-        //"../matrices/crankseg_1/crankseg_1.mtx",
-        //"../matrices/F1/F1.mtx",
-        //"../matrices/Fault_639/Fault_639.mtx",
-        //"../matrices/nlpkkt200/nlpkkt200.mtx",
-        //"../matrices/offshore/offshore.mtx",
-        //"../matrices/pwtk/pwtk.mtx",
-        //"../matrices/Serena/Serena.mtx",
-        //"../matrices/ship_003/ship_003.mtx",
+       // "matrices/3elt/3elt.mtx",
+       // "matrices/thermal2/thermal2.mtx",
+       // "matrices/spinSZ12.mm",
+       // "matrices/crankseg_1/crankseg_1.mtx",
+       // "matrices/F1/F1.mtx",
+       // "matrices/Fault_639/Fault_639.mtx",
+        "matrices/nlpkkt200/nlpkkt200.mtx",
+       // "matrices/offshore/offshore.mtx",
+       // "matrices/pwtk/pwtk.mtx",
+       // "matrices/Serena/Serena.mtx",
+       // "matrices/ship_003/ship_003.mtx"
       };
 
     std::ofstream out("benchmark.csv");
@@ -67,26 +71,20 @@ int main(int argc, char* argv[])
         for(int i=0;i<A.n;++i) bPerm[i] = bOrig[col.perm[i]];
 
         // warm-up
-        std::vector<double> x1, x2, x3;
+        std::vector<double> x1, x2;
         solver::mklTriSolve   (B,true,bPerm,x1);
-        solver::blockBiDiagSolve(B,col.stagePtr,bPerm,x3);
-        solver::blockBiDiagSolveTasks(B,col.stagePtr,bPerm,x2);
+
+       //  solver::blockBiDiagSolveTasks(B,col.stagePtr,bPerm,x2);
 
         // time both solvers K times
         const int K = 1;
-        double t_mkl=0, t_tasks=0, t_seq =0;
+        double t_mkl=0, t_tasks=0;
         for(int i=0;i<K;++i) {
             t_mkl   += time_ms([&]{ solver::mklTriSolve   (B,true,bPerm,x1); });
             t_tasks += time_ms([&]{ solver::blockBiDiagSolveTasks(B,col.stagePtr,bPerm,x2); });
-            t_seq += time_ms([&]{solver::blockBiDiagSolve(B,col.stagePtr,bPerm,x3);});
         }
         t_mkl   /= K;
         t_tasks /= K;
-        t_seq   /= K;
-
-        std::cout << "Sequential BiBlockSolve: " <<t_seq << std::endl;
-        std::cout << "Parallel BiBlockSolve: " <<t_tasks << std::endl;
-        std::cout << "MKL Solver: " <<t_mkl<< std::endl;
 
         double speedup = t_mkl / t_tasks;
         out << file << ","
@@ -98,6 +96,7 @@ int main(int argc, char* argv[])
         std::cout << "Done " << file << "\n";
     }
 
+    LIKWID_MARKER_CLOSE;     // <- flush counters & write file
     return 0;
 }
 
