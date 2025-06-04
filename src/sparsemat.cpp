@@ -8,6 +8,9 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>          // free()
+#include <numeric>
+#include <unordered_map>
+
 #include "mmio.h"           // MatrixMarket reader
 
 bool sparsemat::load_matrix_market(const std::string &file)
@@ -205,4 +208,112 @@ void sparsemat::dump_pattern(const std::string& fname) const
     for (index_t r = 0; r < n; ++r)
         for (index_t p = rowPtr[r]; p < rowPtr[r + 1]; ++p)
             out << r << ' ' << col[p] << '\n';
+}
+
+sparsemat sparsemat::multiply(const sparsemat& B) const
+{
+    // -------- 1. basic sanity ---------------------------------------------
+    if (col.empty() || B.col.empty())
+        return {};                          // empty result
+
+    const int M = n;                        // rows  of A  ( = rows of C )
+    const int K = n;                        // cols  of A / rows of B
+    const int N = B.n;                      // cols  of B  ( = cols of C )
+
+    sparsemat C;
+    C.n = M;
+    C.rowPtr.assign(M + 1, 0);
+
+    std::vector<index_t>   tmpCols;         // collects columns per row (sorted later)
+    std::vector<value_t>   tmpVals;
+
+    // -------- 2. row-by-row multiplication -------------------------------
+    std::unordered_map<index_t, value_t> accum;     // <col → value>
+    accum.reserve(64);
+
+    for (int i = 0; i < M; ++i)
+    {
+        accum.clear();
+
+        // A’s row i
+        for (int p = rowPtr[i]; p < rowPtr[i + 1]; ++p)
+        {
+            const int    k   = col[p];
+            const double aik = val[p];
+
+            // B’s row k  (because B is CSR too)
+            for (int q = B.rowPtr[k]; q < B.rowPtr[k + 1]; ++q)
+            {
+                const int    j   = B.col[q];
+                const double bkj = B.val[q];
+                accum[j] += aik * bkj;
+            }
+        }
+
+        // copy accum → C
+        const int nnzRow = static_cast<int>(accum.size());
+        C.rowPtr[i + 1] = C.rowPtr[i] + nnzRow;
+
+        // append, but keep columns sorted (CSR requirement)
+        if (nnzRow)
+        {
+            tmpCols.resize(nnzRow);
+            tmpVals.resize(nnzRow);
+            int idx = 0;
+            for (const auto& kv : accum)        // unordered_map gives arbitrary order
+            {
+                tmpCols[idx] = kv.first;
+                tmpVals[idx] = kv.second;
+                ++idx;
+            }
+            std::vector<int> perm(nnzRow);
+            std::iota(perm.begin(), perm.end(), 0);
+            std::sort(perm.begin(), perm.end(),
+                      [&](int a, int b){ return tmpCols[a] < tmpCols[b]; });
+
+            for (int p : perm)
+            {
+                C.col.push_back(tmpCols[p]);
+                C.val.push_back(tmpVals[p]);
+            }
+        }
+    }
+    return C;
+}
+
+void sparsemat::make_unit_diagonal()
+{
+    // We may need to insert up to n new non-zeros, so reserve once.
+    col.reserve(col.size() + n);
+    val.reserve(val.size() + n);
+
+    // Walk rows *backwards* so that rowPtr stays valid while we insert.
+    for (int r = n - 1; r >= 0; --r)
+    {
+        bool found = false;
+        int  insertPos = rowPtr[r+1];   // default: append at end of the row
+
+        // Scan the current row
+        for (int p = rowPtr[r]; p < rowPtr[r+1]; ++p)
+        {
+            if (col[p] == r)            // diagonal already present
+            {
+                val[p] = 1.0;
+                found  = true;
+                break;
+            }
+            if (col[p] > r && insertPos == rowPtr[r+1])
+                insertPos = p;          // remember first col > r ⇒ keep CSR sorted
+        }
+
+        if (found) continue;            // nothing more to do for this row
+
+        /* --- Insert a new (r,r,1.0) at insertPos ----------------------- */
+
+        col.insert(col.begin() + insertPos, r);
+        val.insert(val.begin() + insertPos, 1.0);
+
+        // Shift rowPtr for all subsequent rows
+        for (int i = r + 1; i <= n; ++i) ++rowPtr[i];
+    }
 }

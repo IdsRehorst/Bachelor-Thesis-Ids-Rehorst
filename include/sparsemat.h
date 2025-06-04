@@ -31,6 +31,12 @@ public:
 
     // Keep only lower (default) or upper triangle, in-place.
     void extract_triangle(bool lower = true);
+
+    // Sparse–sparse product:  C =  this * B
+    sparsemat multiply(const sparsemat& B) const;
+
+    // Make every diagonal entry 1.0 (adds missing ones)
+    void make_unit_diagonal();
 };
 
 #endif //SPARSEMAT_H

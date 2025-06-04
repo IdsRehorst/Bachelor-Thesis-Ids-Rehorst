@@ -59,7 +59,7 @@ void solver::mklTriSolve(const sparsemat &B, bool lower,
                       b.data(), x.data());
         mkl_sparse_destroy(A);
     });
-    std::cout <<"MKL (without setup)" << tMKL << "ms"<< std::endl;
+    std::cout <<"MKL (without setup): " << tMKL << "ms"<< std::endl;
 
 }
 

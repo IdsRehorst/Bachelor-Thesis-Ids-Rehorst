@@ -36,10 +36,9 @@ int main(int argc, char* argv[])
 {
     std::vector<std::string> mats = {
         "../matrices/3elt/3elt.mtx",
-        "../matrices/thermal2/thermal2.mtx",
+        //"../matrices/thermal2/thermal2.mtx",
         "../matrices/spinSZ12.mm", /*…*/
         //"../matrices/crankseg_1/crankseg_1.mtx",
-        //"../matrices/F1/F1.mtx",
         //"../matrices/Fault_639/Fault_639.mtx",
         //"../matrices/nlpkkt200/nlpkkt200.mtx",
         //"../matrices/offshore/offshore.mtx",
@@ -52,11 +51,19 @@ int main(int argc, char* argv[])
     out << "matrix,n,nnz,t_mkl_ms,t_tasks_ms,speedup\n";
 
     for (auto &file : mats) {
-        sparsemat A;   A.load_matrix_market(file);
+        sparsemat A;
+        A.load_matrix_market(file);
+
+        // We take A^3 to make the matrices less sparse
+        A = A.multiply(A);
         A.extract_triangle(true);
-        coloring col;  col.compute(A);
+
+        coloring col;
+        col.compute(A);
         sparsemat B = col.permuted;
         B.extract_triangle(true);
+
+        B.dump_pattern("B_3_pattern_permuted");
 
         // extract blocks once
         std::vector<sparsemat> Lblocks, Bblocks;
@@ -69,7 +76,6 @@ int main(int argc, char* argv[])
         // warm-up
         std::vector<double> x1, x2, x3;
         solver::mklTriSolve   (B,true,bPerm,x1);
-        solver::blockBiDiagSolve(B,col.stagePtr,bPerm,x3);
         solver::blockBiDiagSolveTasks(B,col.stagePtr,bPerm,x2);
 
         // time both solvers K times
@@ -78,13 +84,12 @@ int main(int argc, char* argv[])
         for(int i=0;i<K;++i) {
             t_mkl   += time_ms([&]{ solver::mklTriSolve   (B,true,bPerm,x1); });
             t_tasks += time_ms([&]{ solver::blockBiDiagSolveTasks(B,col.stagePtr,bPerm,x2); });
-            t_seq += time_ms([&]{solver::blockBiDiagSolve(B,col.stagePtr,bPerm,x3);});
         }
+
+        std::cout << "Max absolute error MKL and Parallel BiBlockSolve: " <<solver::maxAbsError(x1, x2) << std::endl;
         t_mkl   /= K;
         t_tasks /= K;
-        t_seq   /= K;
 
-        std::cout << "Sequential BiBlockSolve: " <<t_seq << std::endl;
         std::cout << "Parallel BiBlockSolve: " <<t_tasks << std::endl;
         std::cout << "MKL Solver: " <<t_mkl<< std::endl;
 
