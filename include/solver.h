@@ -23,6 +23,14 @@ public:
                                       const std::vector<double>& b,
                                       std::vector<double>&       x);
 
+    /// Redundant two-phase, task-based block-bidiagonal solve:
+    ///  Phase 1: x′ᵢ = Lᵢ⁻¹ bᵢ           (all blocks in parallel)
+    ///  Phase 2: xᵢ  = Lᵢ⁻¹ (bᵢ – Bᵢ x′ᵢ₋₁)  (all corrections in parallel)
+    static void blockBiDiagSolveTasksAffinity(const sparsemat&        B,
+                                      const std::vector<int>& stagePtr,
+                                      const std::vector<double>& b,
+                                      std::vector<double>&       x);
+                                      
     /// Forward block‐bidiagonal solve by simple block‐substitution:
     ///   x1 = L1⁻¹ b1
     ///   xi = Li⁻¹ (bi − Bi xi-1),  i=2..k
@@ -48,7 +56,6 @@ public:
                            const std::vector<double> &x,
                            size_t count = 50);
 
-
     /// Detailed error report between xA and xB
     ///  - prints max‐error index+values
     ///  - prints the top `count` errors
@@ -63,6 +70,11 @@ public:
                              bool lower,
                              const std::vector<double>& b,
                              std::vector<double>& x);
+                            
+    /// Parallel Sptrsv solver to compare our method with, return the time needed to solve (without setup) 
+    static double kokkosSpTRSV(const sparsemat& B,
+                          const std::vector<double>& b,
+                          std::vector<double>& x);
 };
 
 
