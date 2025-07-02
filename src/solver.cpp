@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <likwid.h>
 
 #include "coloring.h"
 
@@ -46,6 +47,10 @@ void solver::mklTriSolve(const sparsemat &B, bool lower,
     for (int i = 0; i <= n; ++i) ia[i] = B.rowPtr[i];
     for (size_t k = 0; k < B.col.size(); ++k) ja[k] = B.col[k];
 
+    /// Hoe kan ik hier nog ergens thread init in fietsen?
+    // Init Likwid marker for measuring perfomance
+    LIKWID_MARKER_START("MKL");
+
     double tMKL = time_ms([&]{
 
         mkl_sparse_d_create_csr(&A, SPARSE_INDEX_BASE_ZERO,
@@ -59,7 +64,10 @@ void solver::mklTriSolve(const sparsemat &B, bool lower,
                       b.data(), x.data());
         mkl_sparse_destroy(A);
     });
-    std::cout <<"MKL (without setup): " << tMKL << "ms"<< std::endl;
+
+    LIKWID_MARKER_STOP("MKL");
+
+    std::cout <<"MKL (without setup)" << tMKL << "ms"<< std::endl;
 
 }
 
@@ -285,11 +293,11 @@ void solver::serialSpTRSV(const sparsemat& B,
     }
 }
 
-void solver::blockBiDiagSolveTasks(const sparsemat&           B,
+void solver::blockBiDiagSolveTasksAffinity(const sparsemat&           B,
                                    const std::vector<int>&    stagePtr,
                                    const std::vector<double>& b,
                                    std::vector<double>&       x)
-{
+{	
     const int k = int(stagePtr.size()) - 1;
     const int N = B.n;
     x.assign(N, 0.0);
@@ -300,6 +308,10 @@ void solver::blockBiDiagSolveTasks(const sparsemat&           B,
 
 #pragma omp parallel default(none) shared(B,stagePtr,bp,xp,k)
 {
+	// Needed because otherwise we only get insight in one thread
+        LIKWID_MARKER_THREADINIT;
+	// Init Likwid marker for measuring perfomance
+        LIKWID_MARKER_START("sptrsv");
 #pragma omp single
 {
     /* ---------------- Phase 1 : provisional solves ---------------- */
@@ -309,7 +321,10 @@ void solver::blockBiDiagSolveTasks(const sparsemat&           B,
         const int m  = r1 - r0;                 /* block size            */
 
         /* length in the array-section must be  r1-r0,  not the last index */
-#pragma omp task depend(out: xp[r0 : m]) firstprivate(r0,r1,m)
+#pragma omp task                                                \
+        depend(out: xp[r0:m])                                   \
+        affinity( xp[r0:m] )                                      \
+        firstprivate(r0,r1,m)
         {
             std::vector<double> rhs(m), xi(m);
 
@@ -344,8 +359,9 @@ void solver::blockBiDiagSolveTasks(const sparsemat&           B,
         const int r1 = stagePtr[i+1];
         const int m  = r1 - r0;
 
-#pragma omp task  depend(in:    xp[stagePtr[i-1] : stagePtr[i]-stagePtr[i-1]]) \
-                  depend(inout: xp[r0            : m])                          \
+#pragma omp task  depend(in:    xp[stagePtr[i-1]:stagePtr[i]-stagePtr[i-1]]) \
+                  depend(inout: xp[r0:m])                        \
+                  affinity( xp[r0 : m])                             \
                   firstprivate(r0,r1,m)
         {
             std::vector<double> rhs(m), xi(m);
@@ -384,5 +400,94 @@ void solver::blockBiDiagSolveTasks(const sparsemat&           B,
     }
     /* implicit taskwait here */
 } /* single */
+LIKWID_MARKER_STOP("sptrsv");
 } /* parallel */
+}
+
+#include <Kokkos_Core.hpp>
+#include <KokkosSparse_sptrsv.hpp>
+#include <KokkosKernels_Handle.hpp>
+#include <chrono>          // <-- for timing
+
+double solver::kokkosSpTRSV(const sparsemat&           B,
+                            const std::vector<double>& b,
+                            std::vector<double>&       x)
+{
+  using exec_space = Kokkos::DefaultExecutionSpace;          // OpenMP here
+  using mem_space  = typename exec_space::memory_space;
+
+  using size_type  = int;      // match your CSR index types
+  using lno_type   = int;
+  using scalar     = double;
+
+  const size_type n   = B.n;
+  const size_type nnz = static_cast<size_type>(B.val.size());
+
+  /* ------------ host views (build once per call) ---------------- */
+  using RowH = Kokkos::View<size_type*, Kokkos::HostSpace>;
+  using ColH = Kokkos::View<lno_type*,  Kokkos::HostSpace>;
+  using ValH = Kokkos::View<scalar*,    Kokkos::HostSpace>;
+
+  RowH row_h("row_h", n + 1);
+  ColH col_h("col_h", nnz);
+  ValH val_h("val_h", nnz);
+
+  for (size_type i = 0; i <= n;  ++i) row_h(i) = B.rowPtr[i];
+  for (size_type p = 0; p <  nnz; ++p) {
+    col_h(p) = B.col[p];
+    val_h(p) = B.val[p];
+  }
+
+  /* ------------ device mirrors ---------------------------------- */
+  using RowD = Kokkos::View<size_type*, mem_space>;
+  using ColD = Kokkos::View<lno_type*,  mem_space>;
+  using ValD = Kokkos::View<scalar*,    mem_space>;
+  using VecD = Kokkos::View<scalar*,    mem_space>;
+
+  RowD row_d("row_d", n + 1);   ColD col_d("col_d", nnz);
+  ValD val_d("val_d", nnz);     VecD b_d  ("b_d",   n);
+  VecD x_d  ("x_d",   n);
+
+  Kokkos::deep_copy(row_d, row_h);
+  Kokkos::deep_copy(col_d, col_h);
+  Kokkos::deep_copy(val_d, val_h);
+
+  { // copy RHS once
+    auto b_h = Kokkos::create_mirror_view(b_d);
+    for (size_type i = 0; i < n; ++i) b_h(i) = b[i];
+    Kokkos::deep_copy(b_d, b_h);
+  }
+
+  /* ------------ kernel-handle + symbolic ------------------------ */
+  auto t0 = std::chrono::high_resolution_clock::now();
+  using KH = KokkosKernels::Experimental::KokkosKernelsHandle<
+               size_type, lno_type, scalar,
+               exec_space, mem_space, mem_space>;
+
+  KH kh;
+  kh.create_sptrsv_handle(
+        KokkosSparse::Experimental::SPTRSVAlgorithm::SEQLVLSCHD_TP1,
+        n, /*is_lower =*/ true);
+
+  KokkosSparse::Experimental::sptrsv_symbolic(&kh, row_d, col_d, val_d);
+  exec_space().fence();   // done with symbolic part
+
+  /* ------------ NUMERIC solve (timed) --------------------------- */
+
+  KokkosSparse::Experimental::sptrsv_solve(&kh,
+          row_d, col_d, val_d,
+          b_d,  x_d);
+
+  exec_space().fence();
+  auto t1 = std::chrono::high_resolution_clock::now();
+  const double t_ms =
+      std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  /* ------------ copy result back -------------------------------- */
+  auto x_h = Kokkos::create_mirror_view(x_d);
+  Kokkos::deep_copy(x_h, x_d);
+  x.assign(x_h.data(), x_h.data() + n);
+
+  kh.destroy_sptrsv_handle();
+  return t_ms;                    // <----  numeric time only
 }
