@@ -12,8 +12,9 @@ mkdir -p cmake-build-debug-docker && cd cmake-build-debug-docker
 
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_C_COMPILER="$CC" \
-  -DCMAKE_CXX_COMPILER="$CXX" \
+  -DCMAKE_C_COMPILER=gcc\
+  -DCMAKE_CXX_COMPILER=g++ \
+  -DMKL_THREADING=gnu_thread \
   -DCMAKE_PREFIX_PATH="$MKLROOT;$HWLOC_ROOT" \
   -DMKL_DIR="$MKL_CMAKE_DIR"\
   -DHWLOC_INCLUDE_DIR=$HWLOC_ROOT/include \
