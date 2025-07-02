@@ -1,0 +1,483 @@
+\chapter{Implementation}
+\label{chap:implementation}
+
+This chapter translates the algorithmic ideas from
+Chapter \ref{chapter:methodology} into an efficient,
+measurable software prototype.  After introducing
+the sparse data structures (\ref{sec:impl_csr}) and preprocessing
+pipeline (\ref{sec:impl_preproc}) we detail the task–
+based OpenMP implementation of the solver (\ref{sec:impl_tasks}). The implementation of the reference methods given by Intel MKL (\ref{sec:impl_mkl}) and Kokkos (\ref{sec:impl_kokkos}) will be discussed after that. The final
+sections discuss build integration (\ref{chap:impl_build}) and the LIKWID--based performance instrumentation
+(\ref{sec:impl_likwid}). Hardware platforms, compiler flags, and test matrices are collected
+later in Chapter \ref{chapter:Results}.
+
+%--------------------------------------------------------------------
+\section{Sparse Storage and Matrix Preparation}
+\label{sec:impl_csr}
+In order to efficiently solve sparse matrices an efficient storage method must be used, the compressed-row format has been chosen as mentioned previously, a small overview of this format is given below.
+\subsection{Compressed Sparse Row (CSR)}
+Every sparse $n\times n$ matrix is stored in classical CSR \cite{doi:10.1137/1.9780898718003}:
+$$
+  \underbrace{\texttt{rowPtr}}_{n+1}
+  ,\;
+  \underbrace{\texttt{col}}_{\text{nnz}}
+  ,\;
+  \underbrace{\texttt{val}}_{\text{nnz}},
+$$
+where  
+
+\begin{align}
+  \text{rowPtr}[i]   &= \text{offset of first non-zero in row }i,\\
+  \text{col}[p]      &= \text{column index of non-zero }p,\\
+  \text{val}[p]      &= \text{value     of non-zero }p .
+\end{align}
+
+The three arrays are allocated once and reused throughout the
+pipeline so that no format conversions occur after load time.
+
+\subsection{Matrix Ingestion}
+Matrices are read from \texttt{.mtx} files via a
+streaming parser that
+
+\begin{enumerate}
+  \item collects triplets $(i,j,a_{ij})$,
+  \item sorts by $(i,j)$ to build CSR in one pass,
+  \item discards explicit zeros.
+\end{enumerate}
+
+An auxiliary routine
+\texttt{sparsemat::extract\_triangle(bool lower)} keeps
+either the strictly lower or strictly upper part.
+
+\subsection{Synthetic Fill-In (Densification)}
+\label{sec:synthetic_fillin}
+
+In practice one rarely solves a triangular system with the raw sparsity pattern of the coefficient matrix $A$.
+A numerical factorisation (e.g.\ $A = LU$ or $A =RR^{\mathsf T}$) introduces fill-in, so each factor is much denser than $A$ itself. To mimic this situation without running an actual factoriser we densify the test matrices offline by replacing~$A$ with its third power $A^{3}$, which adds many structural non-zeros.
+
+The helper routine
+$$
+  \texttt{sparsemat::multiply(const sparsemat\&)}  
+$$
+
+implements a simple triple loop over rows, columns, and
+intersection lists. Because this densification is executed once during data preparation and never inside the timed kernels, its cost does not affect the performance results presented in Chapter \ref{chapter:Results}.
+
+%--------------------------------------------------------------------
+\section{Pre-Processing by RACE}
+\label{sec:impl_preproc}
+
+The permutation step follows the theory of
+Section \ref{chap:meth_problem_simp_and_reorder}:
+
+\begin{enumerate}
+  \item Build an undirected graph from \texttt{rowPtr}/\texttt{col}.
+  \item Invoke \texttt{RACE::colourGraph(...)} to obtain the
+        level colouring.
+  \item Derive permutation vectors  
+        $P$, $P^{-1}$ and the stage pointer
+        $\texttt{stagePtr}[0\ldots k]$.
+\end{enumerate}
+
+CSR is reordered in-place:
+
+$$
+  \text{val}[p] \leftarrow a_{P^{-1}(i)\,P^{-1}(j)},\qquad
+  \text{col}[p] \leftarrow P(j).
+$$
+
+Finally the upper-triangular half is discarded and only the strictly
+lower part is kept,
+$$
+  \tilde L \;=\; \operatorname{tril}\!\bigl(P\,A\,P^{\mathsf T}\bigr),
+$$
+which is stored as one contiguous CSR array, and this is the block-bidiagonal
+$L$ factor that all subsequent kernels operate on.
+%--------------------------------------------------------------------
+\section{Task-Based OpenMP Kernel}
+\label{sec:impl_tasks}
+
+The theoretical schedule of Section \ref{chap:meth_task_sched} is
+realised with the OpenMP 4.5 task–dependency mechanism \cite{openmp2015programminginterface}.
+Listing \ref{lst:omp_skeleton} shows a condensed skeleton and the full
+routine appears in Appendix \ref{app:code}.
+
+\begin{lstlisting}[language=C++,caption={Skeleton of the
+\texttt{blockBiDiagSolveTasks} kernel.},label={lst:omp_skeleton}]
+#pragma omp parallel default(none) shared(B,stagePtr,bp,xp,k)
+{
+  /* only one thread spawns the tasks */
+  #pragma omp single
+  {
+    /* ---- Phase 1: provisional solves ---- */
+    for (int i=0;i<k;++i) {
+      int r0=stagePtr[i],  m=stagePtr[i+1]-r0;
+      #pragma omp task                                     \
+              depend(out: xp[r0:m])                        \
+              firstprivate(r0,m)
+      provisional_solve(i);
+    }
+
+    /* ---- Phase 2: correction solves ---- */
+    for (int i=1;i<k;++i) {
+      int r0 = stagePtr[i]      ,  m = stagePtr[i+1]-r0;
+      int r00= stagePtr[i-1]    ,  m0= stagePtr[i]-r00;
+      #pragma omp task                                     \
+              depend(in:    xp[r00:m0])                    \
+              depend(inout: xp[r0 :m ])                    \
+              firstprivate(r0,m,r00,m0)
+      correction_solve(i);
+    }
+    /* implicit taskwait */
+  }
+}
+\end{lstlisting}
+
+The outer \verb|#pragma omp parallel| creates a permanent thread team
+that persists for the whole solve.  All shared objects
+(\texttt{B, stagePtr, bp, xp, k}) are therefore visible to every
+thread, avoiding repeated initialisation.
+
+Exactly one thread enters the
+\verb|single| region and enqueues all tasks.  Every other thread waits
+for work in the OpenMP runtime’s task queue.
+
+The \verb|depend| directives translate the logical edges
+$$
+T^{(1)}_i \;\rightarrow\; T^{(2)}_i,
+\qquad
+T^{(2)}_{i-1}\;\rightarrow\;T^{(2)}_{i}
+$$
+into concrete memory-region dependences:
+
+\begin{itemize}
+\item \verb|out: xp[r0:m]|:  
+       the provisional task writes the slice
+      $x_{r_0:r_1-1}$.
+\item \verb|inout: xp[r0:m]|:  
+      the correction task both reads and writes the same slice,
+      enforcing the self–dependence.
+\item \verb|in: xp[r00:m0]|:  
+      a read-only dependence on block $i-1$ realises the pipeline
+      constraint $T^{(2)}_{i-1}\!\rightarrow T^{(2)}_{i}$.
+\end{itemize}
+
+OpenMP guarantees that two tasks whose covered memory regions overlap
+cannot execute concurrently.  Because the correction task’s
+\verb|inout| region is identical to its predecessor’s \verb|out|
+region, most runtimes schedule the pair on the same worker
+thread, thereby preserving cache residency of $L_i$ and $x_i$.
+Formally the standard guarantees mutual exclusion when using the depend clause but
+it does not prescribe which worker thread executes either
+task.
+Most modern runtimes employ work–stealing queues that favour
+child–first scheduling \cite{Robison2014N3872}:
+a thread that finishes a task immediately proceeds with a dependent
+child from its local deque before attempting to steal from others.
+Empirically this heuristic places $T^{(2)}_{i}$ on the same core that
+just produced $T^{(1)}_{i}$, so both the factor $L_i$ and the provisional solution slice $x_i$
+remain in the private cache hierarchy when they are reused, as was assumed in \ref{chap:meth_task_sched}.
+However, the behaviour is an optimisation choice, not a contractual obligation of the OpenMP specification. To ensure that OpenMP actually handles the tasks as expected, the performance and memory usage will be measured using the LIKWID library.
+In the next section we will discuss an extra OpenMP directive that improves cache reuse.
+
+All loop-invariant variables are \verb|shared|.
+Block-local indices (\verb|r0,m|) are passed \verb|firstprivate|,
+which copies their value into the task’s context to avoid false
+sharing.
+
+The two \emph{for} loops spawn a total of $2k-1$ tasks whose
+dependencies replicate exactly the graph of Section \ref{chap:meth_task_sched}.  After the start-up latency of the first block, the pipeline contains
+one correction task $T^{(2)}_{i}$ plus as many provisional tasks $T^{(1)}_{j}\;(j>i)$ as the thread pool can accommodate, so the sequential correction chain overlaps with the independent provisional tasks.
+OpenMP’s dynamic queue ensures that additional provisional tasks are
+pulled forward whenever idle threads exist, so the implementation can
+exploit thread counts $p>2$ even though the span is already saturated
+with two.
+
+\section{Task-Based OpenMP Kernel with Affinity}
+\label{sec:impl_tasks_aff}
+
+Early experiments used exactly the schedule of
+Section \ref{chap:meth_task_sched} but without any affinity
+directives.  The gcc runtime then relied on its default work–stealing policy:
+after a thread finished a provisional task it often, but not
+always, executed the dependent correction task. occasionally the task
+was stolen by a different core. The memory traces in Section \ref{sec:results:cache-reuse} show the
+consequence.  Across all matrices the private L2 caches delivered barely
+$10 \%$ of the required data, while the shared LLC registered
+gigabytes of traffic and a miss ratio below $9 \%$, thus the provisional
+slice left the L2 before the correction step could reuse it.
+
+To enforce cache reuse the implementation now
+adopts the affinity clause, introduced only in
+OpenMP~5.0 \cite{openmp5.0}.  
+Listing \ref{lst:omp_skeleton_aff} shows the relevant lines.
+Each provisional task specifies its output slice as
+\verb|affinity(xp[r0])| and the matching correction task repeats the
+same anchor.  The runtime regards this as a strong hint that both tasks should run
+close to the physical storage location of that address, which in
+practice means the same core when the data reside in its private cache.
+Because affinity is a hint rather than a hard constraint the
+standard still allows the runtime to place tasks differently.
+
+\begin{lstlisting}[language=C++,caption={Core of
+\texttt{blockBiDiagSolveTasksAffinity}.},label={lst:omp_skeleton_aff}]
+#pragma omp parallel default(none) shared(B,stagePtr,bp,xp,k)
+{
+  #pragma omp single
+  {
+    /* ---- Phase 1 : provisional solves ---- */
+    for(int i=0;i<k;++i){
+      int r0 = stagePtr[i];
+      int m  = stagePtr[i+1]-r0;
+      #pragma omp task                                         \
+              depend(out: xp[r0:m])                            \
+              affinity(  xp[r0]   )                            \
+              firstprivate(r0,m)
+      provisional_solve(i);
+    }
+
+    /* ---- Phase 2 : correction solves ---- */
+    for(int i=1;i<k;++i){
+      int r0  = stagePtr[i]      ,  m  = stagePtr[i+1]-r0;
+      int r00 = stagePtr[i-1]    ,  m0 = stagePtr[i]-r00;
+      #pragma omp task                                         \
+              depend(in:    xp[r00:m0])                        \
+              depend(inout: xp[r0 :m ])                        \
+              affinity(  xp[r0]   )                            \
+              firstprivate(r0,m,r00,m0)
+      correction_solve(i);
+    }
+    /* implicit taskwait */
+  }
+}
+\end{lstlisting}
+
+All other implementation details remain unchanged: global data are
+\textsf{shared}, block-local indices are \textsf{firstprivate}, and the
+two loops spawn $2k-1$ tasks whose dependencies reproduce the
+pipeline graph exactly.
+%--------------------------------------------------------------------
+\section{Reference Implementation with Intel MKL}
+\label{sec:impl_mkl}
+To put the task--based solver into context we benchmark it against
+Intel’s highly optimised sparse triangular routine and use the latter
+as a truth model for numerical validation.
+
+Intel oneMKL exposes two triangular kernels for sparse matrices stored
+in CSR format \cite{intel_mkl_linux_devguide_2020}:
+
+\begin{enumerate}
+  \item \texttt{mkl\_dcsrtrsv}  
+        — a single–call BLAS\,$\mathrm{TRSV}$ analogue that
+        performs symbolic analysis and numerical solve in one go;
+  \item \texttt{inspector\_exec}  
+        — the Inspector–Executor interface that separates
+        pattern analysis (\texttt{mkl\_sparse\_optimize}) from the
+        repeated numerical solves
+        (\texttt{mkl\_sparse\_trsv}).
+\end{enumerate}
+
+Because the matrices are solved for dozens of right–hand sides, the
+Inspector–Executor (IE) variant is chosen: its one–off symbolic phase
+is amortised just like the RACE permutation. According to the Intel MKL Developer Reference \cite{intel_mkl_linux_devguide_2020}, all Level-3 BLAS and all Sparse BLAS routines except Level-2 sparse triangular solvers are threaded, the sparse triangular solve (\texttt{sptrsv}) kernel is thus inherently single-threaded.  This is important to note when comparing our method to MKL.
+
+For fair comparison the following wall‐clock protocol is adopted:
+\begin{enumerate}
+  \item allocate and initialise the right–hand side $b$ and
+        solution vector $x$ once,
+  \item call the IE inspection phase
+        outside the timed section,
+  \item repeat the numerical solve $N_{\mathrm{rep}}$ times,
+  \item record the median time $t_{\mathrm{MKL}}$.
+\end{enumerate}
+
+The same repetition / cache–flush procedure is applied to the task
+solver introduced in this report, the reported speed-up is therefore
+$$
+  \text{speed-up} =\frac{t_{\mathrm{MKL}}}{t_{\text{tasks}}}.
+$$
+After each run the residual
+$$
+  r \;=\;
+  \|\,b - Lx\|_2
+$$
+is computed in double precision and compared to the residual produced
+by MKL.  The solutions are deemed equivalent if  
+$$
+  \frac{\lvert r_{\text{tasks}} - r_{\mathrm{MKL}}\rvert}
+       {r_{\mathrm{MKL}}}
+  < 10^{-12}.
+$$
+This is done to ensure the correctness of the solution found by the implemented solver.
+
+The full function implementation can be found in Appendix \ref{app:code_mkl}.
+%--------------------------------------------------------------------
+\section{Reference Implementation with Kokkos-Kernels}
+\label{sec:impl_kokkos}
+To compare the proposed method from Chapter \ref{chapter:methodology} with a truly
+parallel solver we adopted the sparse triangular routines that ship
+with Kokkos-Kernels\,4.6.  
+Kokkos provides a performance-portable node–level programming model;
+its sparse sub-package implements several SpTRSV algorithms that
+exploit intra‐row parallelism and level scheduling on any back-end
+supported by Kokkos (OpenMP, CUDA, etc.) \cite{rajamanickam2021kokkoskernelsperformanceportable}.
+
+The \texttt{SPTRSVAlgorithm::SEQLVLSCHD\_TP1} variant was selected
+because it is available for all execution spaces, performs one symbolic pass that discovers a level structure very much like the one in Section \ref{chap:meth_task_sched}, and distributes rows of the same level over the OpenMP thread team while respecting data dependencies within a level by atomic updates \cite{rajamanickam2021kokkoskernelsperformanceportable}.
+The algorithm therefore represents the state of the art for OpenMP implementations in Kokkos-Kernels and provides an
+appropriate comparison for the task-graph approach of this thesis.
+
+Just like Intel MKL, Kokkos distinguishes symbolic and
+numeric phases via a kernel handle:
+
+\begin{enumerate}
+    \item Create a kernel handle: A small object kh is instantiated and configured with
+          
+          \texttt{kh.create\_sptrsv\_handle(SPTRSVAlgorithm::SEQLVLSCHD\_TP1, nrows, isLower=true);}
+          
+          Here the chosen algorithm \texttt{(SEQLVLSCHD\_TP1)} is a parallel level-scheduling
+          variant, \texttt{nrows} is the matrix dimension, and the Boolean flag declares that
+          the matrix is lower triangular.
+    \item Symbolic (inspector) phase: \texttt{sptrsv\_symbolic(\& kh, rowmap\_d, entries\_d, values\_d);}
+          Using the CSR structure on the device, Kokkos builds the level
+          schedule, detects super-nodes and computes internal metadata.  All
+          results are stored inside the handle and therefore incurred only once.
+    \item Numeric (executor) phase: \texttt{sptrsv\_solve(\& kh, rowmap\_d, entries\_d, values\_d, rhs\_d, lhs\_d);}
+          The prepared schedule is applied to solve $Lx=b$ (or $Ux=b$)
+          for the device-resident right-hand side \texttt{rhs\_d}, writing the solution
+          into \texttt{lhs\_d}.  This step is fully parallel and can be repeated
+          with different b vectors while re-using the same handle.
+\end{enumerate}
+Because the symbolic cost is amortised over all subsequent solves, the
+timing methodology mirrors that used for MKL and for our
+RACE-based solver: only the numeric phase is included in the
+performance figures, while the one-time inspector is measured
+separately.
+
+Because Kokkos executes on the same OpenMP back-end as the task kernel,
+all measurements were taken with \verb|OMP_PROC_BIND=TRUE| and
+\verb|OMP_PLACES=cores| so that every benchmark sees the same binding.
+The wall-clock protocol mirrors MKL:
+
+\begin{enumerate}
+  \item allocate and fill $b$ and $x$ once and copy them to the
+        device views;
+  \item run \texttt{sptrsv\_symbolic} outside the timed region;
+  \item repeat \texttt{sptrsv\_solve} $N_{\mathrm{rep}}$ times;
+  \item record the median time $t_{\mathrm{KK}}$.
+\end{enumerate}
+
+Host-to-device transfers, \texttt{Kokkos::initialize} and
+\texttt{Kokkos::finalize} are likewise excluded from the timed section,
+matching the treatment of MKL’s set-up overhead.
+
+After every repetition the dense residual
+$r = \|b-Lx\|_2$ is assembled on the host and compared with the MKL
+reference.  The solution returned by Kokkos is accepted when
+
+\[
+  \frac{|\,r_{\mathrm{KK}}-r_{\mathrm{MKL}}\,|}{r_{\mathrm{MKL}}}
+  < 10^{-12},
+\]
+
+which is the same tolerance used for the task solver
+(Section \ref{sec:impl_mkl}).  All matrices given in Table \ref{tab:matrices_benchmarks} passed.
+The full function implementation can be found in Appendix \ref{app:code_kokkos}.
+%--------------------------------------------------------------------
+\section{Performance Instrumentation with LIKWID}
+\label{sec:impl_likwid}
+The qualitative cache–reuse arguments from
+Section \ref{chap:meth_cost_analysis} must be backed up by
+hardware‐counter measurements. For this purpose the LIKWID is integrated
+into the build and execution workflow of the solver.
+
+LIKWID is a light-weight
+suite for low–level performance monitoring on x86 processors \cite{gruber_likwid_2024}.
+The component \texttt{likwid-perfctr} programs the on-chip
+Performance-Monitoring Counters (PMCs) with a single command–line flag
+\texttt{-g~<group>}, where a performance group is a
+pre-defined, architecture-specific set of events such as
+\emph{L3 hits}, \emph{L3 misses}, \emph{executed AVX instructions},
+or \emph{DRAM bandwidth}.  
+A second flag \texttt{-C~<corelist>} selects the hardware threads to
+be measured.
+
+The solver is instrumented with the \texttt{LIKWID}
+Marker API, which inserts a pair of ultra-low overhead system calls
+around the region of interest.  Markers are placed inside the OpenMP parallel region so that
+each thread reports separate counter values and that makes it possible to specifically measure the performance of the solver implemented.
+
+A typical run on one socket (cores 0–15) that records cache- and
+memory-traffic looks like
+\begin{verbatim}
+$ likwid-perfctr -C M0:0-15 -g L3 -m  ./tri_solve
+$ likwid-perfctr -C M0:0-15 -g MEM -m ./tri_solve
+\end{verbatim}
+\texttt{-m} activates the marker API, without it the whole
+process would be measured.
+
+Three groups are sufficient to validate the performance model:
+\begin{enumerate}
+  \item \textbf{L3}\,:  
+        gathers the counters 
+        \texttt{MEM\_LOAD\_RETIRED\_L3\_HIT} and
+        \texttt{MEM\_LOAD\_RETIRED\_L3\_MISS};  
+        the resulting hit–to–miss ratio confirms the expected high
+        reuse of $L_i$ during the correction step.
+
+  \item \textbf{MEM}\,:  
+        records the sustained DRAM bandwidth and shows if the
+        overlapping algorithm does increase the total data
+        volume moved.
+
+  \item \textbf{FLOPS\_DP}\,:  
+        reports scalar and vector double-precision throughput,
+        capturing the extra $2\ell$ floating-point operations and
+        demonstrating that the kernel is compute-bound on modern CPUs.
+\end{enumerate}
+
+%--------------------------------------------------------------------
+\section{Build Integration and Software Dependencies}
+\label{chap:impl_build}
+%--------------------------------------------------------------------
+
+The complete solver prototype is written in modern \texttt{C++17} and is built with CMake
+which orchestrates the compilation.
+
+All sources are compiled with \texttt{GCC\,15.1.0}.  
+At the time of writing this is the first GCC release whose OpenMP
+runtime fully supports the \verb|affinity(...)| clause introduced in
+OpenMP 5.0.  
+Earlier versions ignore the directive silently, thereby defeating the
+cache–local execution strategy of Section \ref{sec:impl_tasks_aff}.  
+Using 15.1.0 is therefore mandatory for the affinity–aware task kernel \cite{OpenMPCompilers}.
+
+Dense BLAS and sparse triangular kernels used for baseline comparisons
+(\ref{sec:baseline_cost})  
+are provided by Intel’s oneAPI Math Kernel Library.
+The interface variant \texttt{lp64} is selected for 64-bit integers, and
+the thread layer is mapped to the OpenMP runtime already present on the
+system.  
+
+RACE generates the permutation that exposes block–level parallelism
+(\ref{chap:meth_problem_simp_and_reorder}).
+It is added as an in-tree \texttt{ExternalProject} so that an
+unmodified upstream checkout is configured, built, and installed into the build
+directory at configure time.  
+Both RACE and LIKWID query the hardware topology through
+hwloc.  
+All components rely on OpenMP for thread-level parallelism.
+
+The resulting artefact is one relocatable binary
+(\texttt{tri\_solve}) that pulls in
+RACE, MKL, hwloc, LIKWID, Kokkos-Kernels and OpenMP.
+
+%--------------------------------------------------------------------
+\section{Summary}
+The prototype maps the proposed algorithm onto a CSR backend, parallelizes
+it with OpenMP tasks that mirror the theoretical dependency graph, and
+measures all critical kernels with LIKWID. The full source code, CMake recipes, and benchmarking scripts are archived
+at \url{https://github.com/IdsRehorst/Bachelor-Thesis-Ids-Rehorst/tree/main}. The next chapter
+quantifies how these design choices translate into runtime behaviour
+and scalability on a HPC platform.
+

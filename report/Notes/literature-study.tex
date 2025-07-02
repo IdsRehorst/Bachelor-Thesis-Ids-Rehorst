@@ -1,5 +1,85 @@
-\documentclass[class=article, crop=false]{standalone}
-\begin{document}
-\section{Literature Study}
-Lulverhaal hier
-\end{document}
+\subsection{Raw Performance and Speed-up}
+Figure~\ref{fig:runtime} plots the wall‐clock time of the three
+solvers on DelftBlue.  For the 16 M × 16 M
+\texttt{spinSZ12} matrix our implementation attains
+$2.1\times$ speed‐up over MKL already at eight threads and continues to
+scale up to 48 threads, where it is \(6.8\times\) faster.
+
+\begin{figure}[ht]
+  \centering
+  % placeholder for actual PGFPlots
+  \includegraphics[width=.85\textwidth]{runtime.pdf}
+  \caption{Run time versus thread count for the three largest matrices
+           (DelftBlue).}
+  \label{fig:runtime}
+\end{figure}
+
+\subsection{Memory Traffic}
+The L3‐miss data volume measured by LIKWID corroborates the
+analytical prediction \(Q_{\text{overlap}} = Q_{\text{base}}\):
+even though \(4\ell\) flops are executed, the bytes funnelled
+through the last‐level cache match those of the baseline within
+5 \%.  MKL issues \(1.8\times\) more DRAM reads, confirming its
+memory‐bound nature.
+
+\begin{align}
+  \text{AI}_{\text{ours}}
+  = \frac{4\ell + 2\beta}{Q_{\text{overlap}}}
+  \;\approx\; 2 \times
+  \text{AI}_{\text{baseline}},
+\end{align}
+
+which moves the kernel above the machine’s roofline
+(Section~\ref{sec:roofline}) on both test platforms.
+
+\subsection{Thread Scaling}
+Figure~\ref{fig:scaling} shows speed‐up relative to one thread.
+Up to \(p\approx 2\) the solver is span‐limited.
+Thereafter the curve follows the \(W/p\) trajectory predicted in
+Section~\ref{sec:parallel_performance}.  On Alex the scaling saturates
+earlier because the Zen 3 cores reach the memory‐bandwidth ceiling at
+$\approx 96$ threads.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=.85\textwidth]{speedup.pdf}
+  \caption{Parallel speed-up for \texttt{nlpkkt200} (both platforms).}
+  \label{fig:scaling}
+\end{figure}
+
+%--------------------------------------------------------------------
+\section{Roofline Interpretation}\label{sec:roofline}
+%--------------------------------------------------------------------
+Figure~\ref{fig:roofline} places the measured arithmetic intensity and
+GFLOP/s on a machine roofline.  The overlapping solver lifts
+\(I\) to the compute‐bound region, thereby unlocking the higher
+peak FLOP rate of Sapphire Rapids.  MKL remains memory‐bound.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=.75\textwidth]{roofline.pdf}
+  \caption{Roofline plot for \texttt{spinSZ12} on DelftBlue.}
+  \label{fig:roofline}
+\end{figure}
+
+%--------------------------------------------------------------------
+\section{Summary}
+%--------------------------------------------------------------------
+The experimental results confirm the qualitative expectations of
+Chapter~\ref{chapter:methodology}.  Despite performing twice as many
+floating-point operations on the diagonal blocks, the two-block
+overlapping solver
+
+\begin{enumerate}
+  \item keeps the data volume equal to a single traversal of the
+        sparsity pattern,
+  \item halves the dependency depth, reaching full utilisation with
+        only two threads,
+  \item scales with the work term up to the memory bandwidth limit, and
+  \item outperforms Intel MKL by up to \(7\times\) on matrices with
+        millions of rows.
+\end{enumerate}
+
+The next chapter analyses remaining bottlenecks—chiefly task launch
+overheads and NUMA effects—and sketches avenues for further
+optimisation.

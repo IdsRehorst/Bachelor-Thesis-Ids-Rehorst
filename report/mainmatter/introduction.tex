@@ -1,4 +1,63 @@
 \chapter{Introduction}
 \label{chapter:introduction}
 
-\emph{An introduction... \cite{example-article}}
+% Introduceer probleem
+Solving triangular linear systems is an operation that appears in a broad spectrum of scientific and engineering applications. Sparse triangular systems emerge naturally from LU decompositions, from incomplete-factorization preconditioners, and within sub-domain solvers in domain-decomposition schemes; Consequently, they are fundamental to finding the numerical solution of many partial differential equations. Although forward and backward substitution needed to solve such a triangular system define a strictly sequential data dependency, the sparsity makes parallelization possible. Unfortunately, prevailing methods often buys this parallelism at the expense of regular data accesses (which leads to poor spatial cache locality) so the CPU ends up starved by cache misses or stalled by insufficient parallel work, leading to sub-optimal performance on modern hardware architectures.
+
+% Geef doelstelling
+In this report a method is introduced that tries to increase parallelism by introducing redundant computations, mitigating the effect of that redundancy by temporal cache locality.
+
+% Structuur aankondiging
+The next section begins with formally defining the problem and its mathematical formulation in Section \ref{chap:lr_problem_formulation}. Following this in Section \ref{chap:intro_objectives}, the goals of this project are given. Section \ref{chap:intro_overview} gives a brief overview of the material covered in this report.
+
+% ----------------------------------------------------------------------------------------------------------------------------------
+
+% Na suggesties veel van literature study naar intro, dat komt hier
+% Problem Formulation
+\section{Problem Formulation}
+\label{chap:lr_problem_formulation}
+
+The efficient numerical solution of sparse triangular linear systems is a fundamental problem in scientific computing, arising in a wide range of applications, including sparse direct solvers and preconditioners for iterative methods. Specifically, we are concerned with solving linear systems of the form: 
+\begin{align}
+    Lx =b,
+\end{align}
+where $L \in \mathbb{R}^{n \times n}$ is a sparse lower triangular matrix, $b \in \mathbb{R}^n$ is a given right-hand side vector, and $x \in \mathbb{R}^n$ is the unknown solution vector to be computed. A matrix $\mathbf{A} \in \mathbb{R}^{N\times N}$ is called sparse when the vast majority of its $N^{2}$ entries are exactly zero. This operation is commonly referred to as Sparse Triangular Solve (SpTRSV). Note that $L$ could also be a sparse upper triangular matrix, and the method that will be implemented in this report also works for upper triangular matrices, but for the sake of simplicity $L$ is assumed to be a lower triangular matrix throughout this report unless noted otherwise. 
+
+In the context of modern high-performance computing, the development of efficient parallel algorithms for SpTRSV has become increasingly important. As hardware architectures continue to evolve towards manycore and heterogeneous designs, exploiting parallelism at multiple levels is essential to achieve high throughput. However, the inherently sequential nature of triangular solves poses a significant challenge for parallel execution, limiting scalability and performance on such architectures. These challenges will be further discussed in the next section.
+
+The primary objective of this work is to develop and analyse a SpTRSV method that is optimized specifically for modern multi-core processors with large caches. In particular, we are interested in approaches that leverage task-based parallelism and exploit the structure of the problem to expose concurrency, while mitigating the negative impact of data dependencies and irregular memory access patterns. A full overview of goals for this project are given in Section \ref{chap:intro_objectives}.
+
+It is important to emphasize that the focus lies on the solution of very large sparse linear systems, where the problem size is sufficiently large to amortize any algorithmic overhead introduced by parallelization strategies. Techniques such as structural reordering, redundant computations, and task scheduling inherently involve additional computations and management costs. For small problem sizes, these overheads may outweigh the performance gains. However, for large-scale systems, as encountered in applications like finite element simulations, computational fluid dynamics, or large-scale graph analytics, such methods become increasingly effective and necessary to fully utilize modern hardware capabilities. Throughout this report, we thus primarily consider scenarios where the size and sparsity of the matrix $L$ justify the introduction of these techniques. 
+
+\section{Objectives}
+\label{chap:intro_objectives}
+The thesis is motivated by the broad ambition to answer:
+Can SpTRSV be sped up by using redundant computations to improve data locality?
+
+From that question three concrete objectives are derived:
+\begin{enumerate}
+    \item \textbf{Identify and exploit parallelism in SpTRSV }
+    
+    Show that a task- or block-based schedule lets many CPU cores
+    advance simultaneously without data hazards.  
+    Any clear acceleration on multi-core hardware is considered a successful
+    indication.
+    \item \textbf{Maximise cache reuse}
+    
+    Reorder computations so that data already loaded into cache is reused
+    more frequently than in a naïve row-wise solve.  
+    Lower cache-miss activity or higher arithmetic intensity, as measured
+    with hardware counters, would signal improvement.
+    \item \textbf{Quantify the benefit over existing methods}
+    
+    Benchmark the prototype against a well-known vendor libraries. The aim is to find out in which cases our approach is favourable. 
+\end{enumerate}
+
+
+\section{Thesis Outline}
+\label{chap:intro_overview}
+The remainder of this report is organised as follows.
+Chapter \ref{chapter:literature_review} surveys the state of the art in sparse–triangular solves, tracing the evolution from thread-level parallelism to modern task-based, cache-aware strategies and exposing the performance gap this project targets, while also giving an introduction to the most important concepts needed to understand this thesis.
+Chapter \ref{chapter:methodology} then shows the solution method used to solve sparse triangular linear systems introduced in this report.
+Building on this foundation, Chapter \ref{chap:implementation} details the implementation of our task-based block bi-diagonal solver. 
+The quantitative impact of these design decisions is presented in Chapter \ref{chapter:Results}, which compares our solver against other methods for SpTRSV across a suite of real-world matrices. Finally, Chapter \ref{chapter:conclusion} summarises the main findings, reflects on current limitations, and outlines avenues for future research.

@@ -1,36 +1,248 @@
-%% ----------------------------------------------------------------------
-%%    Examples of common entries
-%% ----------------------------------------------------------------------
-
-@article{example-article,
-    author = {I. Surname and I. Surname and I. Surname},
-    title = {The Title of the Article},
-    journal = {The Title of the Journal},
-    volume = {1},
-    number = {2},
-    pages = {123-456},
-    year = {2000},
-    note = {}
-}
-
-@book{example-book,
-    author = {I. Surname and I. Surname and I. Surname},
-    title = {The Title of the Book},
-    publisher = {Publisher},
-    year = {2000},
-    edition = {8th ed.},
-    address = {City, State or Country},
-    note = {}
-}
-
-@online{example-website,
-    author = {{Website Name} <OR> I. Surname and I. Surname and I. Surname},
-    title = {Title of the Website},
-    url = {https://example.com},
-    urldate = {2020-12-24},
-    year = {2000}
-}
 
 %% ----------------------------------------------------------------------
 %%    Start of bibliography
 %% ----------------------------------------------------------------------
+@InProceedings{10.1007/978-3-319-07518-1_8,
+author="Park, Jongsoo
+and Smelyanskiy, Mikhail
+and Sundaram, Narayanan
+and Dubey, Pradeep",
+editor="Kunkel, Julian Martin
+and Ludwig, Thomas
+and Meuer, Hans Werner",
+title="Sparsifying Synchronization for High-Performance Shared-Memory Sparse Triangular Solver",
+booktitle="Supercomputing",
+year="2014",
+publisher="Springer International Publishing",
+address="Cham",
+pages="124--140",
+abstract="The last decade has seen rapid growth of single-chip multiprocessors (CMPs), which have been leveraging Moore's law to deliver high concurrency via increases in the number of cores and vector width. Modern CMPs execute from several hundreds to several thousands concurrent operations per second, while their memory subsystem delivers from tens to hundreds Giga-bytes per second bandwidth.",
+isbn="978-3-319-07518-1"
+}
+
+@article{10.1145/3399732,
+author = {Alappat, Christie and Basermann, Achim and Bishop, Alan R. and Fehske, Holger and Hager, Georg and Schenk, Olaf and Thies, Jonas and Wellein, Gerhard},
+title = {A Recursive Algebraic Coloring Technique for Hardware-efficient Symmetric Sparse Matrix-vector Multiplication},
+year = {2020},
+issue_date = {September 2020},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {7},
+number = {3},
+issn = {2329-4949},
+url = {https://doi.org/10.1145/3399732},
+doi = {10.1145/3399732},
+abstract = {The symmetric sparse matrix-vector multiplication (SymmSpMV) is an important building block for many numerical linear algebra kernel operations or graph traversal applications. Parallelizing SymmSpMV on today’s multicore platforms with up to 100 cores is difficult due to the need to manage conflicting updates on the result vector. Coloring approaches can be used to solve this problem without data duplication, but existing coloring algorithms do not take load balancing and deep memory hierarchies into account, hampering scalability and full-chip performance. In this work, we propose the recursive algebraic coloring engine (RACE), a novel coloring algorithm and open-source library implementation that eliminates the shortcomings of previous coloring methods in terms of hardware efficiency and parallelization overhead. We describe the level construction, distance-k coloring, and load balancing steps in RACE, use it to parallelize SymmSpMV, and compare its performance on 31 sparse matrices with other state-of-the-art coloring techniques and Intel MKL on two modern multicore processors. RACE outperforms all other approaches substantially. By means of a parameterized roofline model, we analyze the SymmSpMV performance in detail and discuss outliers. While we focus on SymmSpMV in this article, our algorithm and software are applicable to any sparse matrix operation with data dependencies that can be resolved by distance-k coloring.},
+journal = {ACM Trans. Parallel Comput.},
+month = jun,
+articleno = {19},
+numpages = {37},
+keywords = {Sparse matrix, graph algorithms, graph coloring, memory hierarchies, scheduling, sparse symmetric matrix-vector multiplication}
+}
+
+@InProceedings{10.1007/978-3-031-64850-2_42,
+author="Marrakchi, Sirine
+and Kaaniche, Heni",
+editor="Abraham, Ajith
+and Bajaj, Anu
+and Hanne, Thomas
+and Siarry, Patrick
+and Ma, Kun",
+title="Solving Sparse Triangular Linear Systems: A Review of Parallel and Distributed Solutions",
+booktitle="Intelligent Systems Design and Applications",
+year="2024",
+publisher="Springer Nature Switzerland",
+address="Cham",
+pages="440--449",
+abstract="Solving sparse triangular linear systems (spTRSV) represents a basic core in numerous scientific and computational applications such as numerical linear algebra routines including Gaussian Elimination, LU and Cholesky decompositions, etc. Finding a parallel implementation for SpTRSV is a challenging task owing to the sequential structure of the steps concerned. In this study, we review various existing approaches for spTRSV. These methods broadly split into two major categories based on sets (level or color) and methods without set creation. Another classification consists of fine-grained parallelism (small tasks) and coarse-grained parallelism (large tasks). This paper discusses and provides a performance comparison of several recent approaches for spTRSV carried out on different types of parallel and distributed architectures. It investigates the literature in terms of the structure of sparse matrices, task granularity, scheduling, data dependencies, and architecture of the target parallel machine. Ultimately, the relevant findings and future research challenges are also addressed.",
+isbn="978-3-031-64850-2"
+}
+
+@inproceedings{10.1145/3404397.3404428,
+author = {Yamazaki, Ichitaro and Rajamanickam, Sivasankaran and Ellingwood, Nathan},
+title = {Performance Portable Supernode-based Sparse Triangular Solver for Manycore Architectures},
+year = {2020},
+isbn = {9781450388160},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3404397.3404428},
+doi = {10.1145/3404397.3404428},
+abstract = {Sparse triangular solver is an important kernel in many computational applications. However, a fast, parallel, sparse triangular solver on a manycore architecture such as GPU has been an open issue in the field for several years. In this paper, we develop a sparse triangular solver that takes advantage of the supernodal structures of the triangular matrices that come from the direct factorization of a sparse matrix. We implemented our solver using Kokkos and Kokkos Kernels such that our solver is portable to different manycore architectures. This has the additional benefit of allowing our triangular solver to use the team-level kernels and take advantage of the hierarchical parallelism available on the GPU. We compare the effects of different scheduling schemes on the performance and also investigate an algorithmic variant called the partitioned inverse. Our performance results on an NVIDIA V100 or P100 GPU demonstrate that our implementation can be 12.4 \texttimes{} or 19.5 \texttimes{} faster than the vendor optimized implementation in NVIDIA’s CuSPARSE library.},
+booktitle = {Proceedings of the 49th International Conference on Parallel Processing},
+articleno = {70},
+numpages = {11},
+location = {Edmonton, AB, Canada},
+series = {ICPP '20}
+}
+
+@inproceedings{10.1145/3404397.3404413,
+author = {Lu, Zhengyang and Niu, Yuyao and Liu, Weifeng},
+title = {Efficient Block Algorithms for Parallel Sparse Triangular Solve},
+year = {2020},
+isbn = {9781450388160},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3404397.3404413},
+doi = {10.1145/3404397.3404413},
+abstract = {The sparse triangular solve (SpTRSV) kernel is an important building block for a number of linear algebra routines such as sparse direct and iterative solvers. The major challenge of accelerating SpTRSV lies in the difficulties of finding higher parallelism. Existing work mainly focuses on reducing dependencies and synchronizations in the level-set methods. However, the 2D block layout of the input matrix has been largely ignored in designing more efficient SpTRSV algorithms. In this paper, we implement three block algorithms, i.e., column block, row block and recursive block algorithms, for parallel SpTRSV on modern GPUs, and propose an adaptive approach that can automatically select the best kernels according to input sparsity structures. By testing 159 sparse matrices on two high-end NVIDIA GPUs, the experimental results demonstrate that the recursive block algorithm has the best performance among the three block algorithms, and it is on average 4.72x (up to 72.03x) and 9.95x (up to 61.08x) faster than cuSPARSE v2 and Sync-free methods, respectively. Besides, our method merely needs moderate cost for preprocessing the input matrix, thus is highly efficient for multiple right-hand sides and iterative scenarios.},
+booktitle = {Proceedings of the 49th International Conference on Parallel Processing},
+articleno = {63},
+numpages = {11},
+keywords = {GPU, block algorithm, sparse matrix, sparse triangular solve},
+location = {Edmonton, AB, Canada},
+series = {ICPP '20}
+}
+
+@article{data_layout,
+author = {Smith, Barry and Zhang, Hong},
+year = {2011},
+month = {11},
+pages = {386-391},
+title = {Sparse triangular solves for ILU revisited: Data layout crucial to better performance},
+volume = {25},
+journal = {IJHPCA},
+doi = {10.1177/1094342010389857}
+}
+
+@techreport{levinthal2010performance,
+  author       = {Levinthal, David},
+  title        = {Performance Analysis Guide for Intel\textregistered{} Core\texttrademark{} i7 Processor and Intel\textregistered{} Xeon\texttrademark{} 5500 processors},
+  institution  = {Intel Corporation},
+  year         = {2010},
+  url          = {https://www.intel.com/content/dam/develop/external/us/en/documents/performance-analysis-guide-181827.pdf}
+}
+
+@book{rauber2023parallel,
+  author    = {Rauber, Thomas and Rünger, Gudula},
+  title     = {Parallel Programming},
+  publisher = {Springer International Publishing},
+  address   = {Cham},
+  year      = {2023},
+  doi       = {10.1007/978-3-031-28924-8}
+}
+
+@techreport{openmp2015programminginterface,
+  author       = {OpenMP Architecture Review Board},
+  title        = {OpenMP Application Programming Interface},
+  institution  = {OpenMP Architecture Review Board},
+  year         = {2015},
+  url          = {https://www.openmp.org/wp-content/uploads/openmp-4.5.pdf}
+}
+
+@article{carvalho2015performance,
+  author    = {L. M. Carvalho},
+  title     = {A performance comparison of linear algebra libraries for sparse matrix-vector product},
+  journal   = {Proceeding Series of the Brazilian Society of Computational and Applied Mathematics},
+  year      = {2015},
+  doi       = {10.5540/03.2015.003.01.0116},
+  url       = {https://doi.org/10.5540/03.2015.003.01.0116}
+}
+
+@article{10.1145/2049662.2049663,
+author = {Davis, Timothy A. and Hu, Yifan},
+title = {The university of Florida sparse matrix collection},
+year = {2011},
+issue_date = {November 2011},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {38},
+number = {1},
+issn = {0098-3500},
+url = {https://doi.org/10.1145/2049662.2049663},
+doi = {10.1145/2049662.2049663},
+abstract = {We describe the University of Florida Sparse Matrix Collection, a large and actively growing set of sparse matrices that arise in real applications. The Collection is widely used by the numerical linear algebra community for the development and performance evaluation of sparse matrix algorithms. It allows for robust and repeatable experiments: robust because performance results with artificially generated matrices can be misleading, and repeatable because matrices are curated and made publicly available in many formats. Its matrices cover a wide spectrum of domains, include those arising from problems with underlying 2D or 3D geometry (as structural engineering, computational fluid dynamics, model reduction, electromagnetics, semiconductor devices, thermodynamics, materials, acoustics, computer graphics/vision, robotics/kinematics, and other discretizations) and those that typically do not have such geometry (optimization, circuit simulation, economic and financial modeling, theoretical and quantum chemistry, chemical process simulation, mathematics and statistics, power networks, and other networks and graphs). We provide software for accessing and managing the Collection, from MATLAB™, Mathematica™, Fortran, and C, as well as an online search capability. Graph visualization of the matrices is provided, and a new multilevel coarsening scheme is proposed to facilitate this task.},
+journal = {ACM Trans. Math. Softw.},
+month = dec,
+articleno = {1},
+numpages = {25},
+keywords = {sparse matrices, performance evaluation, multilevel algorithms, Graph drawing}
+}
+
+@manual{intel_mkl_linux_devguide_2020,
+  title        = {{Intel\textregistered{} Math Kernel Library for Linux* Developer Guide}},
+  organization = {Intel Corporation},
+  address      = {Santa Clara, CA},
+  year         = {2020},
+  note         = {Revision 068\, Intel\textregistered{} MKL 2020},
+  url = {https://cdrdv2-public.intel.com/671193/mkl-2020-developer-guide-linux.pdf}
+}
+
+@book{doi:10.1137/1.9780898718003,
+author = {Saad, Yousef},
+title = {Iterative Methods for Sparse Linear Systems},
+publisher = {Society for Industrial and Applied Mathematics},
+year = {2003},
+doi = {10.1137/1.9780898718003},
+address = {},
+edition   = {Second},
+URL = {https://epubs.siam.org/doi/abs/10.1137/1.9780898718003},
+eprint = {https://epubs.siam.org/doi/pdf/10.1137/1.9780898718003}
+}
+
+@techreport{Robison2014N3872,
+  author       = {Arch Robison},
+  title        = {A Primer on Scheduling Fork-Join Parallelism with Work Stealing},
+  institution  = {ISO/IEC JTC1/SC22/WG21},
+  type         = {WG21 Technical Report},
+  number       = {N3872},
+  year         = {2014},
+  month        = {January},
+  note         = {Doc.\ No.\ N3872},
+  url          = {https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n3872.pdf}
+}
+
+@online{delftblue_system,
+  author       = {{TU Delft High-Performance Computing Centre (DHPC)}},
+  title        = {Description of the DelftBlue system},
+  year         = {2024},
+  month        = {September},
+  url          = {https://doc.dhpc.tudelft.nl/delftblue/DHPC-hardware/#description-of-the-delftblue-system},
+  urldate      = {2024-06-12},
+  note         = {Last updated 2024-09-01, retrieved \urldate}
+}
+
+@online{alex_nhr_fau,
+  author       = "{Erlangen National High Performance Computing Center (NHR@FAU)}",
+  title        = "{Alex GPU Cluster: System Overview and User Documentation}",
+  howpublished = "\url{https://doc.nhr.fau.de/clusters/alex/}",
+  year         = {2025},
+  note         = "[Online; accessed 24-Jun-2025]"
+}
+
+@software{gruber_likwid_2024,
+  author    = {Gruber, Thomas and Panzlaff, Michael and Eitzinger, Jan and
+               Hager, Georg and Wellein, Gerhard},
+  title     = {{LIKWID}},
+  version   = {5.4.1},
+  year      = {2024},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.14364500},
+  url       = {https://doi.org/10.5281/zenodo.14364500}
+}
+
+@manual{openmp5.0,
+  title        = {OpenMP Application Programming Interface\,—\,Version 5.0},
+  author       = {{OpenMP Architecture Review Board}},
+  organization = {OpenMP Architecture Review Board},
+  year         = {2018},
+  month        = nov,
+  note         = {Specification Version 5.0},
+  url          = {https://www.openmp.org/specifications/},
+}
+
+@misc{rajamanickam2021kokkoskernelsperformanceportable,
+  title={Kokkos Kernels: Performance Portable Sparse/Dense Linear Algebra and Graph Kernels},
+  author={Sivasankaran Rajamanickam and Seher Acer and Luc Berger-Vergiat and Vinh Dang and Nathan Ellingwood and Evan Harvey and Brian Kelley and Christian R. Trott and Jeremiah Wilke and Ichitaro Yamazaki},
+  year={2021},
+  eprint={2103.11991},
+  archivePrefix={arXiv},
+  primaryClass={cs.MS},
+  url={https://arxiv.org/abs/2103.11991}}
+
+@misc{OpenMPCompilers,
+  author       = {{OpenMP Architecture Review Board}},
+  title        = {OpenMP® Compilers \& Tools},
+  howpublished = {\url{https://www.openmp.org/resources/openmp-compilers-tools/}},
+  note         = {Accessed 27 June 2025},
+  year         = {2025}
+}

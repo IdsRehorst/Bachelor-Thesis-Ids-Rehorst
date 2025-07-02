@@ -1,4 +1,106 @@
-\chapter{Conclusion}
+\chapter{Conclusion and Recommendations}
 \label{chapter:conclusion}
 
-\emph{A conclusion...}
+\section{Conclusions}
+The thesis set out to examine whether redundant computation can
+accelerate sparse triangular solves by (i) exposing parallelism,
+(ii) increasing cache reuse and (iii) delivering tangible benefits
+over established vendor libraries.  
+The objectives are now revisited after the results found in Chapter \ref{chapter:Results}. 
+
+By recasting the forward substitution into a two-phase
+block–bidiagonal schedule and mapping that schedule to OpenMP tasks,
+the solver sustained concurrent progress on up to six CPU cores before
+the critical correction chain became the only bottleneck.
+On the five largest matrices the strong-scaling factor reached
+$1.3-1.45$ already at $p=6$ threads
+(Fig. \ref{fig:parallel_speedup_task}).  
+Although this absolute speed-up is modest, it is achieved with
+considerably fewer threads than Kokkos-Kernels, which continues to
+scale until about $p=16$ (Fig.~\ref{fig:parallel_speedup_kokkos}).
+The experiment therefore confirms that the redundant formulation does
+indeed reveal exploitable parallelism in SpTRSV.
+
+Hardware counters taken prior to introducing the \texttt{affinity}
+clause showed an L\textsubscript{2} miss rate above $90\,\%$,
+indicating that OpenMP’s default work-stealing repeatedly moved paired
+tasks onto different cores.  
+Adding an affinity hint reduced the median run time by up to
+a factor of two (Fig. \ref{fig:speedup_non_aff_aff}), proving that the
+producer–consumer locality envisioned in the cost model can be
+realised in practice.  Although a second LIKWID study was not possible
+within the allotted time, the consistent wall-clock improvement across
+all matrices substantiates the claim that cache reuse was
+substantially improved.
+
+Against Intel~MKL the task solver is constrained by MKL’s exceptionally
+fast single-thread path; nevertheless at $p=24$ it is up to an order
+of magnitude faster because MKL is sequential by design
+(Fig. \ref{fig:rel_speedup_mkl_tasks}).  
+When compared to the parallel reference in Kokkos-Kernels the picture
+is more balanced.  
+Our implementation reaches its memory-bandwidth limit after six to
+eight threads, whereas Kokkos continues to shorten run time until the
+core count approaches sixteen.  The resulting speed-ups therefore
+hover around unity for large matrices
+(Fig.~\ref{fig:rel_speedup_kokkos_tasks}), i.e. both solvers are
+equally fast once they are bandwidth bound.  
+The only systematic deviation occurs for \texttt{Ship\_003}, whose
+dense Cholesky-like structure favours MKL’s dense micro-kernel and
+offers little block parallelism, underscoring the limits of the
+approach for well structured SPD systems.
+
+The study demonstrates that a redundant two-pass algorithm, even in a
+first implementation, can rival highly optimised library code while
+requiring only a handful of threads and no architecture-specific
+tuning.  
+Its advantage is most pronounced for large, irregular matrices where
+memory latency dominates, and it diminishes for small or
+Cholesky-friendly factors that fit into cache.  
+Given the simplicity of the kernel and the conservative thread counts
+used, the results suggest that further optimisation could extend the performance
+range still further. 
+
+%--------------------------------------------------------------------
+\section{Recommendations}
+\label{sec:recommendations}
+%--------------------------------------------------------------------
+
+While the present study establishes that redundant two-phase scheduling
+can match the performance of vendor libraries on contemporary
+multi-core CPUs, it also exposes several directions in which the
+prototype could be extended and strengthened.
+
+Inside each diagonal block the prototype still calls a plain row-by-row
+SpTRSV (\texttt{serialSpTRSV}).  Substituting this routine by a
+high-performance micro-kernel, e.g. a blocked ICC(0) solve or a small-BLR
+triangular kernel, would reduce solve time and improve numerical
+stability when pivots are ill-conditioned.  A drop-tolerant or mixed-precision variant could trade accuracy for bandwidth on bandwidth-bound blocks.
+
+Although the \texttt{affinity} hints introduced in
+Section \ref{sec:impl_tasks_aff} reduce work stealing, the OpenMP
+standard still provides no formal guarantee that a
+producer–consumer task pair will execute on the same core.  
+Consequently, cache residency remains a heuristic decision of the
+runtime and can be lost under load imbalance or NUMA pressure.
+Future work should therefore explore task–scheduling strategies, 
+whether via alternative runtimes or custom policies, that treat
+cache reuse as a hard constraint rather than a
+best-effort optimisation.
+
+So far RACE is used in its default distance-1 mode, producing a
+bi-block diagonal pattern.  Allowing distance-2 or distance-$k$
+colourings would generate wider pipelines and expose additional
+parallelism once Phase 2 becomes the critical path.  
+
+A more robust code base should shield users from matrices that violate
+assumptions such as explicit diagonals, symmetric sparsity or
+non-singular blocks.  Integrating run-time guards, automated unit
+tests and continuous integration would harden the solver for
+production use and ensure that performance regressions are caught
+early.
+
+Exploring these avenues would deepen the understanding of redundant
+triangular solves, extend their applicability to truly massive
+problems, and sharpen the performance edge over established vendor
+libraries.

@@ -1,0 +1,47 @@
+\chapter{SpTRSV Implementation with Intel MKL}
+\label{app:code_mkl}
+The full implementation of the Intel MKL based solver used as a reference to the method presented in Appendix \ref{app:code} is given below.
+\begin{lstlisting}[language=C++,caption={Full implementation of the
+\texttt{MKL SpTRSV} kernel.}]
+    void solver::mklTriSolve(const sparsemat &B, bool lower,
+                         const std::vector<double> &b,
+                         std::vector<double> &x)
+{
+    int n = B.n;
+
+    // --- check if every row has an explicit diagonal --------------------
+    bool explicitDiag = true;
+    for (int r = 0; r < n && explicitDiag; ++r) {
+        bool found = false;
+        for (int p = B.rowPtr[r]; p < B.rowPtr[r + 1]; ++p)
+            if (B.col[p] == r) { found = true; break; }
+        explicitDiag = found;
+    }
+
+
+    sparse_matrix_t A = nullptr;
+    matrix_descr desc{};
+    desc.type = SPARSE_MATRIX_TYPE_TRIANGULAR;
+    desc.mode = lower ? SPARSE_FILL_MODE_LOWER : SPARSE_FILL_MODE_UPPER;
+    desc.diag = explicitDiag ? SPARSE_DIAG_NON_UNIT : SPARSE_DIAG_UNIT;
+
+    std::vector<MKL_INT> ia(n + 1);  std::vector<MKL_INT> ja(B.col.size());
+    for (int i = 0; i <= n; ++i) ia[i] = B.rowPtr[i];
+    for (size_t k = 0; k < B.col.size(); ++k) ja[k] = B.col[k];
+
+    // Init Likwid marker for measuring perfomance
+    LIKWID_MARKER_START("MKL");
+
+    mkl_sparse_d_create_csr(&A, SPARSE_INDEX_BASE_ZERO,
+                            n, n, ia.data(), ia.data() + 1,
+                            ja.data(), const_cast<double*>(B.val.data()));
+    mkl_sparse_optimize(A);
+
+    x.assign(n, 0.0);
+    mkl_sparse_d_trsv(SPARSE_OPERATION_NON_TRANSPOSE,
+                      1.0, A, desc,
+                      b.data(), x.data());
+    mkl_sparse_destroy(A);
+    LIKWID_MARKER_STOP("MKL");
+}
+\end{lstlisting}

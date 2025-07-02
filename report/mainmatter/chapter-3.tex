@@ -1,2 +1,573 @@
 \chapter{Methodology}
-%\label{chapter:title}
+\label{chapter:methodology}
+%structuur aankondiging
+This chapter develops the complete solution strategy step by step.  
+Section \ref{chap:meth_problem_simp_and_reorder} begins by transforming the raw triangular factor with an ordering that exposes an explicit block structure.  Once this structure is in place, Section \ref{chap:meth_solving_bi_block} reviews the classical sequential forward–substitution on the resulting block–bidiagonal matrix, establishing a performance baseline.  
+Section \ref{chap:meth_two_by_two} introduces the method proposed in this thesis for the $2 \times 2$ case.
+Section \ref{chap:meth_kblock} generalises the same ideas to a chain of $k$ blocks and discusses the scheduling rules that guarantee correctness and parallel efficiency.  
+Finally, Section \ref{chap:meth_cost_analysis} analyses the computational and memory costs of the proposed method.
+
+\section{Problem Simplification and Reordering}
+\label{chap:meth_problem_simp_and_reorder}
+% Restate problem (verwijs naar vorig hoofdstuk)
+We begin by recalling the problem that was stated in Section \ref{chap:lr_problem_formulation}: solving a sparse lower triangular system of the form
+\begin{align}
+    Lx=b,
+\end{align}
+where $L \in \mathbb{R}^{n \times n}$ is a sparse lower triangular matrix, $b \in \mathbb{R}^{n}$ a known right-hand side vector, and $x \in \mathbb{R}^{n}$ the solution vector to be computed. 
+
+Although simple in theory, the structure of $L$ imposes a strict partial ordering on the computation of the unknowns $x_i$, as each value $x_i$ can only be computed once all its dependencies have been resolved, as was shown in Section \ref{chap:lr_challenges}. This sequential nature limits the scalability of classical forward substitution methods on parallel hardware. To overcome this, we seek to expose and exploit parallelism by reordering the matrix in a way that groups independent computations into blocks.
+
+%probleem versimpelen naar een biblock diag solve met race
+\subsection{Matrix Reordering with RACE}
+To enable parallelism, a reordering of the matrix $L$ is performed using the Recursive Algebraic Colouring Engine (RACE) library \cite{10.1145/3399732}. RACE first builds the row–dependency graph
+$G(V,E)$ from the sparsity pattern of $L$ ($i \to j \Leftrightarrow\;
+x_j$ depends on $x_i$) and then performs a parallel breadth-first search starting from row 0.  
+Every node reached at distance $\ell$ from the seed is assigned to level $\ell$.  Hence a row in level $k$ can only depend on rows
+in levels $k$ or $k-1$ (for a lower-triangular $L$).  Dependencies within a level are allowed and give rise to the triangular blocks
+on the diagonal in what follows.
+
+From this colouring a permutation matrix $P \in \mathbb{R}^{n \times n}$ is extracted, which is used to permute the original system $Lx=b$. The reordered matrix is given by \begin{align}
+    \Tilde{L} = P L P^T.
+\end{align}
+Here $L_i$ collects all rows of level $i$ and remains lower triangular,
+while $B_i$ contains the non-zeros that link level $i$ to the previous
+level $i{-}1$.  Because no row touches levels further away, the matrix is
+block-lower-bidiagonal. The general structure of the reordered matrix $\Tilde{L}$ is given below:
+\begin{align}
+    \begin{array}{c} \Tilde{L} =
+        \begin{bmatrix}
+         L_1&0 & \cdots& 0& 0\\
+         B_2&L_2 & & & \\
+         0& B_3&L_3 & & \\
+         \vdots& 0&\ddots &\ddots & 0\\
+         0& & &B_k &L_k 
+    \end{bmatrix} \end{array}
+\end{align}
+where each $L_i$ is a square sparse lower triangular block, and $B_i$ is a sparse rectangular block capturing dependencies between level $i-1$ and level $i$. Importantly, the blocks $L_i$ are now independent of one another and can be solved in parallel, subject only to their dependencies through the $B_i$ blocks.
+
+RACE can recursively split large levels or merge thin ones, which lets us
+tune the final block size almost independently of the original sparsity
+pattern.  In practice we choose the threshold so that the number of
+blocks matches (or exceeds) the available hardware threads while keeping
+each $L_k$ small enough to fit into the private cache of a core.
+
+The remainder of this chapter develops an efficient task-based algorithm
+for solving the resulting block-lower-bidiagonal system.
+
+% Hier door de oplosstappen heen lopen
+\section{Solving the Block-Bidiagonal System}
+\label{chap:meth_solving_bi_block} 
+After reordering with RACE the system $Lx=b$ is transformed into the block-lower-bidiagonal form: 
+\begin{align}
+\label{eq:biblock_system}
+    \begin{array}{c} 
+        \begin{bmatrix}
+         L_1&0 & \cdots& 0& 0\\
+         B_2&L_2 & & & \\
+         0& B_3&L_3 & & \\
+         \vdots& 0&\ddots &\ddots & 0\\
+         0& & &B_k &L_k 
+    \end{bmatrix} 
+    \begin{bmatrix}
+        x_1 \\ x_2\\ x_3 \\ \vdots \\ x_k
+    \end{bmatrix} = 
+    \begin{bmatrix}
+        b_1 \\ b_2 \\ b_3 \\ \vdots \\ v_k
+    \end{bmatrix}
+  \end{array}
+\end{align}
+It is very important to note here that the individual entries $x_i$ of $x \in \mathbb{R}^n$ and $b_i$ of $b \in \mathbb{R}^n$ are not scalars, but are vectors with a size that corresponds to the dimension of the corresponding block $L_i$. 
+
+The linear system given by equation \ref{eq:biblock_system} can be solved by a block forward substitution:
+\begin{align}
+    x_1 &= L_1^{-1} b_1
+    \\
+    x_i &= L_i^{-1}(b_i - B_i x_{i-1}) \quad i \in \{2, 3, \dots, k \}
+\end{align}
+Although the block forward substitution is simple and robust, it is strictly sequential: one must finish $x_{1}$ before starting
+$x_{2}$ and so on, leaving no exploitable parallelism for a single right-hand side.  In addition, each triangular block $L_{i}$ is fetched from main memory, applied exactly once, and then evicted, so the memory traffic is dominated by compulsory loads.
+
+Because of the limitations given above, in the next section, a redundant two-block strategy that overlaps the factor applications of neighbouring blocks and reuses $L_i$ while it is still resident in cache. First a 2 × 2 prototype is given, and then the idea is generalized to the complete block-bidiagonal matrix.
+
+% 2x2 case uitwerken
+\section{The $2 \times 2$ Case}
+\label{chap:meth_two_by_two}
+To illustrate how redundancy can unlock both parallelism and cache reuse, first the smallest non-trivial instance of the block-bidiagonal system is considered, namely $k=2$. After the RACE permutation the linear system reads:
+\begin{align}
+    \begin{bmatrix}
+        L_{1} & 0\\
+        B_{2} & L_{2}
+    \end{bmatrix}
+    \begin{bmatrix}
+        x_{1} \\ x_{2}
+    \end{bmatrix}
+    =
+    \begin{bmatrix}
+        b_{1} \\ b_{2}
+    \end{bmatrix},
+    \qquad
+    L_{i}\in\mathbb R^{m_i\times m_i},\; x_{i},b_{i}\in\mathbb R^{m_i}
+\end{align}
+
+A direct block forward substitution proceeds
+\begin{align}
+x_{1} &= L_{1}^{-1} b_{1}, \\
+x_{2} &= L_{2}^{-1}\!\bigl(b_{2}-B_{2}x_{1}\bigr).
+\end{align}
+The two solves form a strict chain, at most one diagonal block can be
+processed at a time, and each triangular factor is read from memory only once
+but is also used only once, resulting in poor cache utilisation.
+
+We trade redundant work for overlap and locality:
+\begin{align}
+&\textbf{Provisional step (parallel)}          &
+  \hat x_{1} &= L_{1}^{-1}b_{1},
+&
+  \hat x_{2} &= L_{2}^{-1}b_{2}, \\
+&\textbf{Correction step } &
+  x_{1} &= \hat x_{1}, 
+  &
+  x_{2} &= L_{2}^{-1}\!\bigl(b_{2}-B_{2}\hat x_{1}\bigr). 
+\end{align}
+The two provisional solves are independent and can run concurrently.  The correction then reuses the already-fetched factor $L_{2}$ while it is still warm in the private L2 cache of the core that computed it, avoiding a
+second trip to main memory.  The critical-path length (often called the span) drops from two full triangular solves to
+$\frac{3}{2}$, at the cost of only one redundant application of $L_{2}$.
+
+\subsection{Key Observations}
+The redundancy incurs one extra triangular solve with $L_2$, however, it shortens the critical path because the first two solves overlap fully, leaving only a single dependent step. At the same time the cache behaviour improves, since the factor $L_2$ is loaded from memory only once yet applied twice while it remains hot.
+
+The same ``provisional + correction'' idea can be applied recursively to the
+$k$-block bidiagonal system, yielding a pipeline in which every diagonal
+block~$L_i$ is reused before it leaves the cache, while task dependencies
+preserve correctness.
+
+% Uitbreiden naar hele matrice (recursive case)
+\section{Extension to a General k-block System}
+\label{chap:meth_kblock}
+
+Consider the reordered system containing $k\ge 2$ diagonal blocks
+\begin{align}
+  \begin{bmatrix}
+    L_{1} &        &        &        &        \\
+    B_{2} & L_{2}  &        &        &        \\
+          & B_{3}  & L_{3}  &        &        \\
+          &        & \ddots & \ddots &        \\
+          &        &        & B_{k}  & L_{k}
+  \end{bmatrix}
+  \begin{bmatrix}
+    x_{1}\\ x_{2}\\ x_{3}\\ \vdots\\ x_{k}
+  \end{bmatrix}
+  =
+  \begin{bmatrix}
+    b_{1}\\ b_{2}\\ b_{3}\\ \vdots\\ b_{k}
+  \end{bmatrix},
+  \qquad
+  L_i\in\mathbb{R}^{m_i\times m_i},\;
+  B_i\in\mathbb{R}^{m_i\times m_{i-1}} .
+  \label{eq:kblock_system}
+\end{align}
+In the previous section it was shown how this system can be solved for the $k = 2$, now this method will be extended for a $k \geq 2$ system.
+\subsection{Two-Phase Redundant Strategy}
+The overlap idea from the $2\times2$ prototype is generalised by splitting the work into two phases.
+
+\textit{Phase 1 (provisional solves):}  
+Each diagonal block $L_i$ is solved independently, so up to
+$\min(k, p)$ blocks can execute in parallel on a machine with $p$ hardware threads. If $k>p$ the surplus blocks are queued as additional tasks:
+\begin{align}
+  \hat{x}_{i} \;=\; L_{i}^{-1} b_{i},
+  \qquad i = 1,\dots,k,
+\end{align}
+ignoring inter-level couplings.  All $k$ solves run concurrently.
+
+\textit{Phase 2 (correction wave):}  
+A single forward sweep injects the missing couplings:
+\begin{align}
+  x_{1} &= \hat{x}_{1}, \notag\\
+  x_{i} &= L_{i}^{-1}\!\bigl(b_{i}-B_{i}x_{i-1}\bigr),
+  \qquad i = 2,\dots,k.
+  \label{eq:kblock_correct}
+\end{align}
+Each $L_{i}$ is therefore applied twice, but the interval between
+applications is only one neighbouring block, so the factor can remain in the private L2 cache.
+The application of these phases can essentially be seen as separate tasks that are applied to solve equation \ref{eq:kblock_system}. A task dependency schedule is what follows and will be shown in the next section.
+
+
+\subsection{Task Schedule}
+\label{chap:meth_task_sched}
+Each block $L_i$ is processed twice:  
+a provisional triangular solve that ignores the sub-diagonal block
+$B_{i}$, followed by a correction that injects the missing
+contribution $B_{i}x_{i-1}$.
+These two steps can be labelled as:
+$$
+  T^{(1)}_{i}\; \text{(provisional)}, \qquad
+  T^{(2)}_{i}\; \text{(correction)}, \qquad i=1,\dots,k .
+$$
+For every block $i$ the right-hand side of the provisional system is
+$$  b^{(1)}_{i}=b_{i}, $$
+which depends on the original right-hand side only.
+Consequently no data produced by any other block are required and the
+tasks $T^{(1)}_{1},\dots, T^{(1)}_{k}$
+are mutually independent.
+The correction task must re-use the provisional solution of the same
+block:
+$$
+  T^{(1)}_{i}
+    \;\longrightarrow\;
+  T^{(2)}_{i},
+  \qquad
+  i=1,\dots,k .
+$$
+This edge reflects the need to keep $L_i$ and $x^{(1)}_i$ in cache so
+that the second application of the factor is inexpensive in terms of
+memory traffic.
+
+Before block $i$ can apply its correction it needs the fully corrected
+solution of the $(i-1)$-th block, because the residual vector is
+$$
+  b^{(2)}_{i}=b_{i}-B_{i}x^{(2)}_{i-1}.
+$$
+Thus the corrections are linked by a forward chain:
+$$
+  T^{(2)}_{i-1}
+    \;\longrightarrow\;
+  T^{(2)}_{i},
+  \qquad
+  i=2,\dots,k .
+$$
+
+After the first two levels have completed their provisional solves the
+pipeline is full:
+$$
+  \begin{array}{c|c|c|c|c|c}
+    \text{time step} & 1 & 2 & 3 & \dots & k\\\hline
+    \text{concurrent tasks} &
+      T^{(1)}_{1} & T^{(1)}_{2},T^{(2)}_{1} &
+      T^{(1)}_{3},T^{(2)}_{2} & \dots &
+      T^{(1)}_{k},T^{(2)}_{k-1}
+  \end{array}
+$$
+
+With $p$ hardware threads available,
+all $T^{(1)}_{1},\dots,T^{(1)}_{k}$ can, in principle, start
+concurrently.
+As soon as the first provisional result $\hat x_{1}$ is ready the
+correction chain $T^{(2)}_{1}\!\to T^{(2)}_{2}\!\to\cdots$ begins and runs in a pipelined fashion.
+During most of the execution time two kinds of work overlap:
+
+$$
+\underbrace{T^{(1)}_{i}}_{\text{full triangular solve}}
+\quad\parallel\quad
+\underbrace{T^{(2)}_{i-1}}_{\text{cheap correction using cached }L_{i-1}}
+$$
+
+Once all provisional solves have completed, the remaining
+$T^{(2)}$-pipeline is bandwidth-bound but substantially cheaper than a
+full triangular solve because it reuses the already-resident
+factor $L_{i}$.
+Consequently the critical path is no longer the full sequential chain of
+$k$ triangular solves but consists of one parallel step for the $T^{(1)}$ tasks, plus roughly $(k-1)$ lightweight corrections, which is shorter and much better parallelised than the baseline algorithm.
+
+In practice the number of hardware threads, $p$, is fixed by the node architecture, whereas the number of logical tasks equals $2k$.  We therefore let the OpenMP task scheduler assign work
+dynamically. A comprehensive discussion of the concrete OpenMP implementation is given
+in Chapter \ref{chap:implementation}.
+
+In the next section, the cost of this method will be analysed.
+
+%--------------------------------------------------------------------
+\section{Cost Analysis of the Proposed Solver}
+\label{chap:meth_cost_analysis}
+
+This section estimates the arithmetic work, data‐movement volume, and
+parallel scalability of the two-block overlapping algorithm
+from Section~\ref{chap:meth_solving_bi_block}.  All quantities are
+expressed in terms of the non-zero counts of the block–bidiagonal
+matrix
+
+Let the reordered system be partitioned into
+$k$ diagonal blocks $L_i\in\mathbb R^{m_i\times m_i}$ and
+sub-diagonal coupling blocks $B_i\in\mathbb R^{m_i\times m_{i-1}}$
+as discussed in Section \ref{chap:meth_problem_simp_and_reorder}.
+Denote their non-zero counts by
+$$
+  \ell_i=\mathrm{nnz}(L_i), \qquad
+  \beta_i=\mathrm{nnz}(B_i),\qquad i=1,\dots,k,
+$$
+and define
+$$
+  \ell \;=\; \sum_{i=1}^{k}\ell_i, 
+  \qquad
+  \beta \;=\; \sum_{i=2}^{k}\beta_i .
+$$
+
+%--------------------------------------------------------------------
+\subsection{Baseline Cost}
+\label{sec:baseline_cost}
+%--------------------------------------------------------------------
+With plain block forward substitution the $i$-th step performs
+
+\begin{align}
+  \mathrm{flop}(i) 
+  \;=\;
+  2\,\ell_i            &\quad\text{(triangular solve)}\\
+  {}+2\,\beta_i        &\quad\text{(update }b_i-B_i x_{i-1}\text{)},
+\end{align}
+
+so that the total work is
+\begin{equation}
+  W_{\mathrm{base}}
+  \;=\;
+  2(\ell + \beta).
+\end{equation}
+
+Each non-zero of $L_i$ or $B_i$ is streamed once from main memory, so
+the matrix traffic is
+
+$$
+  Q_{\mathrm{base}}
+  \;=\;
+  (\ell + \beta)\,\texttt{sizeof(float64)}.
+$$
+The vectors $b$ and $x$ add only ${\cal O}(\sum_i m_i)$ bytes, which is negligible for the large, highly sparse matrices considered here where $\ell+\beta\gg\sum_i m_i$. In practice $b$ is read exactly once and $x$ is written once.
+
+Because every block depends on the fully computed result of its predecessor, the algorithm is strictly sequential: the critical path consists of the entire chain of $k$ block solves and therefore admits no speed-up from parallel execution.
+
+%--------------------------------------------------------------------
+\subsection{Overlapping Two-Block Algorithm}
+\label{sec:parallel_performance}
+%--------------------------------------------------------------------
+The overlapping schedule executes two triangular solves per
+diagonal block:
+
+\begin{equation}
+  W_{\mathrm{overlap}}
+  \;=\;
+  4\ell + 2\beta
+  \;=\;
+  2\,W_{\mathrm{base}}
+  - 2\beta .
+\end{equation}
+
+Thus the floating-point cost on the $L_i$ doubles, whereas the work on
+the $B_i$ is unchanged.
+
+Because the provisional and correction solves of the same block are
+consecutive on the same thread (Section \ref{chap:meth_task_sched}),
+the factor $L_i$ is kept in cache and does not incur a second
+main-memory load:
+
+\begin{equation}
+  Q_{\mathrm{overlap}}
+  \;=\;
+  (\ell + \beta)\,\mathrm{sizeof}(\text{float64})
+  \;=\;
+  Q_{\mathrm{base}} .
+\end{equation}
+
+Consequently the algorithm trades pure compute for a net reduction in
+bytes per flop and is therefore more compute-intensive.
+
+With the pipeline full, one provisional task $T^{(1)}_{i+1}$ overlaps
+with one correction task $T^{(2)}_{i}$.
+The length of the dependency chain (hence the critical path) shrinks to
+
+$$
+  \mathrm{depth}_{\mathrm{overlap}}
+  \;=\;
+  \left\lceil \frac{k+1}{2} \right\rceil,
+$$
+
+yielding a theoretical speed-up factor of approximately $2$ over the
+baseline for large $k$.
+
+The overlap pattern implies that exactly two dependent tasks are
+ready at every step of the pipeline:
+\begin{enumerate}
+    \item the current correction task $T^{(2)}_{i}$
+    \item the next provisional task  $T^{(1)}_{i+1}$.
+\end{enumerate}
+
+Therefore, as soon as $p\geq 2$ hardware threads are available, the
+span term $S$, where $S$ is thus the length of the critical path, can be executed at full speed and adding further
+threads cannot shorten $S$ any more.
+
+Although the critical path is saturated with two threads, a larger
+thread pool improves performance through the work term.  All
+provisional tasks $T^{(1)}_{j}$ for $j> i+1$ are already free of
+dependencies and can be scheduled eagerly.  With $p$ threads the
+upper bound for the runtime becomes  
+
+$$
+  T_p \;\le\; \frac{W}{p} \;+\; S
+  \quad\Longrightarrow\quad
+  \text{speed-up}(p)\;=\;
+  \frac{W}{W/p+S}.
+$$
+
+For $p = 2$ the span is saturated and the speed-up is $ \approx  \tfrac{W}{W/2+W/2}=1 $  (span-limited).
+For $2 < p \ll k$ the work term $\tfrac{W}{p}$ keeps shrinking, so throughput keeps increasing until either memory bandwidth or task
+  scheduling overhead dominates.
+In the idealised case $p\ge k$ every block obtains a private thread and the runtime approaches $T_p\approx \max_i{(L_i)}$, i.e.\ limited
+only by the largest individual block.
+
+The overlapping two-block strategy doubles the arithmetic on the
+diagonal factors, but does not increase memory traffic
+and halves the span of dependent work.
+On modern cache-rich CPUs this trade-off leads to higher
+arithmetic intensity and, as demonstrated in
+Chapter \ref{chapter:Results}, observable speed-ups over
+other sparse triangular solvers.
+
+%--------------------------------------------------------------------
+\subsection{Pre–processing Overhead Due to RACE Reordering}
+\label{sec:meth_cost_race}
+
+Before any triangular solve can benefit from the overlapping schedule,
+the original sparse matrix $L$ is permuted into block–bidiagonal
+form by the RACE library \cite{10.1145/3399732}.  
+The pre–processing consists of three algorithmic stages whose costs
+are summarised below.  Throughout we write  
+$$
+  n=\mathrm{rows}(L), 
+  \qquad
+  \mathrm{nnz}=\mathrm{nnz}(L) .
+$$
+RACE requires a symmetric graph.
+Given that $L$ is a lower triangular matrix, and is thus not symmetric, the pattern must first be augmented with its
+transpose.  Let  
+$$
+  \gamma \;=\; 
+  \frac{\mathrm{nnz}(L \;\cup\; L^{\sf T})}{\mathrm{nnz}}
+  \quad (\gamma \ge 1)
+$$
+quantify this overhead. Because it is assumed that $L$ is a lower triangular matrix, it follows that $\gamma \leq 2$. 
+
+From the symmetrised pattern an
+$n$-vertex graph is built in linear time  
+
+$$
+  T_{\text{graph}}
+  = \mathcal{O}\!\bigl(\gamma\,\mathrm{nnz}\bigr),\qquad
+  Q_{\text{graph}}
+  = \mathcal{O}\!\bigl(\gamma\,\mathrm{nnz}\bigr)\text{ bytes}.
+$$
+
+RACE applies a parallel colouring on sub-graphs
+level by level.  
+The work is again linear in the edge set
+\cite{10.1145/3399732}:
+
+$$
+   T_{\text{colour}}
+  = \mathcal{O}\!\bigl(\gamma\,\mathrm{nnz}\bigr),\qquad
+  S_{\text{colour}}
+  = \mathcal{O}\!\bigl(\log n\bigr).
+$$
+
+Finally the permutation vectors are formed and applied once to the
+matrix as well as to the right-hand side:
+
+$$
+  T_{\text{perm}}
+  = \mathcal{O}\!\bigl(\gamma\,\mathrm{nnz}\bigr),\qquad
+  Q_{\text{perm}}
+  = \mathcal{O}\!\bigl(\gamma\,\mathrm{nnz}\bigr)\text{ bytes}.
+$$
+
+The lower-triangular part of each diagonal block is then copied into a fresh CSR array, so every block occupies one contiguous memory segment. The copy is
+included in the \(T_{\text{perm}}\) term above.
+
+Collecting the terms, the one-off pre-processing overhead is
+
+\begin{align}
+  T_{\textsc{race}}
+  &= 
+  T_{\text{graph}} + T_{\text{colour}} + T_{\text{perm}}
+     \;=\;
+     \Theta\!\bigl(\gamma\,\mathrm{nnz}\bigr),\\
+  Q_{\textsc{race}}
+  &= 
+  Q_{\text{graph}} + Q_{\text{perm}}
+     \;=\;
+     \Theta\!\bigl(\gamma\,\mathrm{nnz}\bigr)\,\text{bytes},\\
+  S_{\textsc{race}}
+  &= 
+  S_{\text{colour}}
+     \;=\;
+     \mathcal{O}(\log n).
+\end{align}
+
+Thus the runtime overhead grows linearly with the size of the
+input matrix, and its critical path is negligible compared to the span
+of a single triangular solve.
+
+In many applications (e.g.\ time stepping, Newton iterations) the same
+triangular factor is solved for numerous right-hand sides $b^{(j)}$.
+Let $N_{\text{rhs}}$ be that number.  
+Inserting the results of
+Sections~\ref{sec:baseline_cost}--\ref{sec:parallel_performance},
+the amortised runtime per solve on $p$ threads is bounded by  
+
+$$
+  T^{\text{amort}}_p
+  \;\le\;
+  \frac{\gamma\,\mathrm{nnz}}{N_{\text{rhs}}\,p}
+  \;+\;
+  \frac{W_{\text{overlap}}}{p}
+  \;+\;
+  S
+  .
+$$
+
+Hence for moderate $N_{\text{rhs}}$ the RACE
+overhead becomes insignificant, whereas the benefits of the overlapping
+solver remain for every subsequent right-hand side.
+
+\subsection{Cost Overview}
+\label{sec:meth_cost_summary}
+%--------------------------------------------------------------------
+The cost model above highlights a deliberate trade–off:
+
+\begin{enumerate}
+  \item\emph{Extra arithmetic.}  
+        Doubling the work on the diagonal blocks adds
+        $2\ell$ flops, but these operations are
+        both cache–resident and vector–friendly, so their cost
+        on modern CPUs is low.
+
+  \item\emph{Unchanged data volume.}  
+        Because every factor $L_i$ is re-used while still in cache,
+        the traffic
+        $Q_{\mathrm{overlap}} = Q_{\mathrm{base}}$
+        remains memory–bound to the same degree as the
+        traditional algorithm.
+
+  \item\emph{Shortened span.}  
+        The overlapping schedule cuts the critical path from
+        $k$ to $\lceil(k+1)/2\rceil$ triangular solves,
+        enabling a theoretical $\approx 2\times$ speed-up
+        at the task level and exposing ample work
+        parallelism for any $p\ge 2$ threads.
+\end{enumerate}
+
+When the one-off RACE permutation is amortised
+over multiple right-hand sides, the dominant costs are therefore
+$$
+  T_p^{\text{amort}}
+  \;\approx\;
+  \frac{4\ell + 2\beta}{p} \;+\; \mathcal O\!\bigl(\log k\bigr),
+  \qquad
+  Q \;=\; (\ell+\beta)\,\mathrm{sizeof}(\text{float64}),
+$$
+so performance is ultimately limited by
+memory bandwidth once the span is saturated.
+
+Chapter \ref{chap:implementation} turns these analytical insights
+into a concrete OpenMP task implementation, discusses practical
+issues, and details how LIKWID counters are used to validate the predicted data
+traffic.  
+Experimental results, a comparison with Intel MKL and Kokkos and other
+baselines follow in Chapter \ref{chapter:Results}, where the model
+derived here is confronted with real hardware measurements.
+

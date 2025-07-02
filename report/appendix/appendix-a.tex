@@ -1,31 +1,110 @@
-\chapter{Source Code Example}
-%\label{chapter:title}
+\chapter{Block Bidiagonal Task Based Solver}
+\label{app:code}
+The full implementation of the block bidiagonal task based solver used to solve sparse triangular system is given below.
+\begin{lstlisting}[language=C++,caption={Full implementation of the
+\texttt{blockBiDiagSolveTasks} kernel.}]
+void solver::blockBiDiagSolveTasks(const sparsemat&           B,
+                                   const std::vector<int>&    stagePtr,
+                                   const std::vector<double>& b,
+                                   std::vector<double>&       x)
+{
+    const int k = int(stagePtr.size()) - 1;
+    const int N = B.n;
+    x.assign(N, 0.0);
 
-\emph{Adding source code to your report/thesis is supported with the package {\normalfont\texttt{listings}}. An example can be found below. Files can be added using {\normalfont\texttt{\textbackslash lstinputlisting[language=<language>]\{<filename>\}}}.}
+    /* raw pointers so that OpenMP array-section syntax works */
+    double       *xp = x.data();
+    const double *bp = b.data();
 
-\begin{lstlisting}[language=Python]
-"""
-ISA Calculator: import the function, specify the height and it will return a
-list in the following format: [Temperature,Density,Pressure,Speed of Sound].
-Note that there is no check to see if the maximum altitude is reached.
-"""
+#pragma omp parallel default(none) shared(B,stagePtr,bp,xp,k)
+{
+#pragma omp single
+{
+    /* ---------------- Phase 1 : provisional solves ---------------- */
+    for (int i = 0; i < k; ++i) {
+        const int r0 = stagePtr[i];
+        const int r1 = stagePtr[i+1];
+        const int m  = r1 - r0;                 /* block size            */
 
-import math
-g0 = 9.80665
-R = 287.0
-layer1 = [0, 288.15, 101325.0]
-alt = [0,11000,20000,32000,47000,51000,71000,86000]
-a = [-.0065,0,.0010,.0028,0,-.0028,-.0020]
+        /* length in the array-section must be  r1-r0,  not the last index */
+#pragma omp task depend(out: xp[r0 : m]) 
+affinity(r0)
+firstprivate(r0,r1,m)
+        {
+            std::vector<double> rhs(m), xi(m);
 
-def atmosphere(h):
-    for i in range(0,len(alt)-1):
-        if h >= alt[i]:
-            layer0 = layer1[:]
-            layer1[0] = min(h,alt[i+1])
-            if a[i] != 0:
-                layer1[1] = layer0[1] + a[i]*(layer1[0]-layer0[0])
-                layer1[2] = layer0[2] * (layer1[1]/layer0[1])**(-g0/(a[i]*R))
-            else:
-                layer1[2] = layer0[2]*math.exp((-g0/(R*layer1[1]))*(layer1[0]-layer0[0]))
-    return [layer1[1],layer1[2]/(R*layer1[1]),layer1[2],math.sqrt(1.4*R*layer1[1])]
+            /* RHS = b_i */
+            for (int j = 0; j < m; ++j)
+                rhs[j] = bp[r0 + j];
+
+            /* solve L_i * x = rhs */
+            for (int ii = 0; ii < m; ++ii) {
+                int    row  = r0 + ii;
+                double sum  = rhs[ii];
+                double diag = 1.0;
+
+                for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
+                    int c = B.col[p];
+                    if      (c <  r0) continue;            /* belongs to B_i   */
+                    else if (c <  row) sum  -= B.val[p] * xi[c - r0];
+                    else if (c == row) diag  = B.val[p];
+                }
+                assert(std::abs(diag) > 1e-30);
+                xi[ii] = sum / diag;
+            }
+
+            /* write provisional result */
+            for (int j = 0; j < m; ++j) xp[r0 + j] = xi[j];
+        }
+    }
+
+    /* ---------------- Phase 2 : correction solves ----------------- */
+    for (int i = 1; i < k; ++i) {
+        const int r0 = stagePtr[i];
+        const int r1 = stagePtr[i+1];
+        const int m  = r1 - r0;
+
+#pragma omp task  depend(in:    xp[stagePtr[i-1] : stagePtr[i]-stagePtr[i-1]]) \
+                  depend(inout: xp[r0            : m])                          \
+                  affinity(r0)
+                  firstprivate(r0,r1,m)
+        {
+            std::vector<double> rhs(m), xi(m);
+
+            /* RHS = b_i - B_i * x_{i-1} */
+            for (int ii = 0; ii < m; ++ii) {
+                int    row = r0 + ii;
+                double sum = bp[row];
+
+                for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
+                    int c = B.col[p];
+                    if (c < r0) sum -= B.val[p] * xp[c];
+                }
+                rhs[ii] = sum;
+            }
+
+            /* solve L_i*x = rhs */
+            for (int ii = 0; ii < m; ++ii) {
+                int    row  = r0 + ii;
+                double sum  = rhs[ii];
+                double diag = 1.0;
+
+                for (int p = B.rowPtr[row]; p < B.rowPtr[row+1]; ++p) {
+                    int c = B.col[p];
+                    if      (c <  r0) continue;            /* already in RHS   */
+                    else if (c <  row) sum  -= B.val[p] * xi[c - r0];
+                    else if (c == row) diag  = B.val[p];
+                }
+                assert(std::abs(diag) > 1e-30);
+                xi[ii] = sum / diag;
+            }
+
+            /* write corrected result */
+            for (int j = 0; j < m; ++j) xp[r0 + j] = xi[j];
+        }
+    }
+    /* implicit taskwait here */
+} /* single */
+} /* parallel */
+}
 \end{lstlisting}

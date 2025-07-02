@@ -1,0 +1,17 @@
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Sparse triangular solves (SpTRSV) form the latency–critical inner loop of many direct and iterative solvers, but strong data dependencies limit thread–level parallelism and make the kernel dominated by memory–latency.
+This thesis explores whether redundant computation can be exchanged for improved data locality to accelerate SpTRSV on cache-based multi-core CPUs.
+
+The proposed two-phase algorithm first uses the Recursive Algebraic Colouring Engine (RACE) to permute an arbitrary sparse triangular factor into a block-lower–bidiagonal form whose diagonal blocks fit into a private L2 cache.
+Each block is then solved twice: an independent provisional pass followed by a lightweight correction that re-uses the still-resident data.
+The resulting task graph halves the critical path, exposes ample parallelism, and leaves total memory traffic unchanged.
+
+An OpenMP5.0 implementation in \texttt{C++17} employs the new \texttt{affinity} clause so that producer–consumer task pairs are likely to run on the same core.
+Performance is compared against IntelMKL’s sparse triangular routine and the Kokkos-Kernels \texttt{sptrsv}, while LIKWID counters validate cache behaviour.
+
+On a 24-core Cascade Lake node of the DelftBlue supercomputer the task graph achieves a strong-scaling speed-up between $1.25$ and $1.45$ that saturates after roughly six threads; Kokkos attains similar absolute time only beyond sixteen threads.
+With 24 threads the solver is up to an order of magnitude faster than single-threaded MKL, and the \texttt{affinity} hint alone accelerates execution by $1.1$–$2\times$, confirming the importance of cache reuse.
+MKL remains preferable for small or highly structured SPD matrices, but on irregular, memory-bound factors the new solver rivals state-of-the-art libraries despite its simple prototype status.
+
