@@ -1,0 +1,20 @@
+matrix,n,nnz,nzr,t_mkl_ms,t_tasks_ms,t_seq_ms, speedup_tasks, speedup_mkl
+matrices/3elt/3elt.mtx,4720,40672,8,0.152367,0.618763,0,0,0
+matrices/thermal2/thermal2.mtx,1228045,9059306,7,41.9274,47.2712,0,0,0
+matrices/spinSZ12.mm,924,10248,11,0.0360513,0.0982607,0,0,0
+matrices/crankseg_1/crankseg_1.mtx,52804,23306764,441,60.2902,39.4002,0,0,0
+matrices/F1/F1.mtx,343791,59622506,173,154.954,116.561,0,0,0
+matrices/Fault_639/Fault_639.mtx,638802,52352454,81,164.873,135.689,0,0,0
+matrices/nlpkkt200/nlpkkt200.mtx,16240000,232232816,14,595.296,388.616,0,0,0
+matrices/offshore/offshore.mtx,259789,8920914,34,22.4962,25.6288,0,0,0
+matrices/pwtk/pwtk.mtx,217918,14585029,66,31.1627,62.3648,0,0,0
+matrices/Serena/Serena.mtx,1391349,124657017,89,393.763,322.016,0,0,0
+matrices/ship_003/ship_003.mtx,121728,12621433,103,30.0378,27.0503,0,0,0
+matrices/channel-500x100x100-b050/channel-500x100x100-b050.mtx,4802000,183299749,38,652.279,483.904,0,0,0
+matrices/delaunay_n22/delaunay_n22.mtx,4194304,31084084,7,144.677,144.011,0,0,0
+matrices/delaunay_n23/delaunay_n23.mtx,8388608,62744002,7,299.596,289.363,0,0,0
+matrices/delaunay_n24/delaunay_n24.mtx,16777216,124327844,7,591.888,567.864,0,0,0
+matrices/nlpkkt120/nlpkkt120.mtx,3542400,50194096,14,87.3403,65.845,0,0,0
+matrices/nlpkkt160/nlpkkt160.mtx,8345600,118931856,14,227.371,158.238,0,0,0
+matrices/G3_circuit/G3_circuit.mtx,1585478,9430475,5,31.1338,33.4731,0,0,0
+matrices/Spielman_k500/Spielman_k500_A_09.mtx,41792002,125752496,3,600.834,553.255,0,0,0
