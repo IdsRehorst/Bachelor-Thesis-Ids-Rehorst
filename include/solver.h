@@ -10,7 +10,7 @@ class solver
 public:
     /// Solve B·x = b (lower or upper triangular) via Intel MKL.
     /// Prints the solve time (excluding matrix creation).
-    static void mklTriSolve(const sparsemat &B,
+    static double mklTriSolve(const sparsemat &B,
                             bool lower,
                             const std::vector<double> &b,
                             std::vector<double> &x);
