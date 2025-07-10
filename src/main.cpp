@@ -105,13 +105,13 @@ int main(int argc, char* argv[])
         const int K = 100;
         double t_mkl=0, t_tasks=0, t_kokkos=0;
         for(int i=0;i<K;++i) {
-            t_mkl   += time_ms([&]{ solver::mklTriSolve   (B,true,bPerm,x1); });
+            t_mkl   += solver::mklTriSolve(B,true,bPerm,x1);
             t_tasks += time_ms([&]{ solver::blockBiDiagSolveTasksAffinity(B,col.stagePtr,bPerm,x2); });
-	        t_kokkos += solver::kokkosSpTRSV(B, bPerm, x3);
+	    t_kokkos += solver::kokkosSpTRSV(B, bPerm, x3);
         }
         t_mkl   /= K;
         t_tasks /= K;
-	    t_kokkos /= K;
+	t_kokkos /= K;
 	
 	std::cout << "Max absolute error: "<< solver::maxAbsError(x2, x3) << std::endl;
 
