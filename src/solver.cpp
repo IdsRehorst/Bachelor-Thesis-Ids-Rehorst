@@ -21,7 +21,7 @@ double time_ms(Fn &&fn)
     return std::chrono::duration<double, std::milli>(t1 - t0).count();
 }
 
-void solver::mklTriSolve(const sparsemat &B, bool lower,
+double solver::mklTriSolve(const sparsemat &B, bool lower,
                          const std::vector<double> &b,
                          std::vector<double> &x)
 {
@@ -68,7 +68,7 @@ void solver::mklTriSolve(const sparsemat &B, bool lower,
     LIKWID_MARKER_STOP("MKL");
 
     std::cout <<"MKL (without setup)" << tMKL << "ms"<< std::endl;
-
+ return tMkl;
 }
 
 //------------------------------------------------------------------------------
