@@ -47,27 +47,22 @@ double solver::mklTriSolve(const sparsemat &B, bool lower,
     for (int i = 0; i <= n; ++i) ia[i] = B.rowPtr[i];
     for (size_t k = 0; k < B.col.size(); ++k) ja[k] = B.col[k];
 
-    /// Hoe kan ik hier nog ergens thread init in fietsen?
-    // Init Likwid marker for measuring perfomance
-    LIKWID_MARKER_START("MKL");
-
-    double tMKL = time_ms([&]{
-
-        mkl_sparse_d_create_csr(&A, SPARSE_INDEX_BASE_ZERO,
+	mkl_sparse_d_create_csr(&A, SPARSE_INDEX_BASE_ZERO,
                             n, n, ia.data(), ia.data() + 1,
                             ja.data(), const_cast<double*>(B.val.data()));
-        mkl_sparse_optimize(A);
+    mkl_sparse_optimize(A);
 
-        x.assign(n, 0.0);
+    x.assign(n, 0.0);
+
+	// Time the solve phase op the MKL solver
+    double tMKL = time_ms([&]{
         mkl_sparse_d_trsv(SPARSE_OPERATION_NON_TRANSPOSE,
                       1.0, A, desc,
                       b.data(), x.data());
-        mkl_sparse_destroy(A);
-    });
+	});
 
-    LIKWID_MARKER_STOP("MKL");
+	mkl_sparse_destroy(A);
 
-    std::cout <<"MKL (without setup)" << tMKL << "ms"<< std::endl;
  return tMkl;
 }
 
@@ -459,7 +454,6 @@ double solver::kokkosSpTRSV(const sparsemat&           B,
   }
 
   /* ------------ kernel-handle + symbolic ------------------------ */
-  auto t0 = std::chrono::high_resolution_clock::now();
   using KH = KokkosKernels::Experimental::KokkosKernelsHandle<
                size_type, lno_type, scalar,
                exec_space, mem_space, mem_space>;
@@ -473,7 +467,8 @@ double solver::kokkosSpTRSV(const sparsemat&           B,
   exec_space().fence();   // done with symbolic part
 
   /* ------------ NUMERIC solve (timed) --------------------------- */
-
+  auto t0 = std::chrono::high_resolution_clock::now();
+  
   KokkosSparse::Experimental::sptrsv_solve(&kh,
           row_d, col_d, val_d,
           b_d,  x_d);
