@@ -12,6 +12,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(LIKWID REQUIRED CONFIG)
 find_package(MKL REQUIRED CONFIG)
 find_package(RACE REQUIRED CONFIG)
+find_library(INTEL_OMP_LIB NAMES "iomp5")
+
+message(STATUS "INTEL_OMP_LIB=${INTEL_OMP_LIB}")
 
 find_package(OpenMP REQUIRED)
 set(MKL_INTERFACE "lp64")
@@ -52,7 +55,8 @@ target_link_libraries(bachelor_thesis PUBLIC
 		${LIKWID_LIBRARIES}
 		pthread
 		Kokkos::kokkos
-		Kokkos::kokkoskernels)
+		Kokkos::kokkoskernels
+		${OMP_LIBRARY})
 
 target_compile_definitions(bachelor_thesis PUBLIC LIKWID_PERFMON)
 

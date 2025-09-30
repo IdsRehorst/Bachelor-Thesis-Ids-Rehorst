@@ -1,4 +1,4 @@
 #!/bin/bash
-source env-delftblue.sh
+source ../env-delftblue.sh
 cmake ..
 
