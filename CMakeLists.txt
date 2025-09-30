@@ -49,14 +49,12 @@ target_link_libraries(bachelor_thesis PUBLIC
 		OpenMP::OpenMP_CXX
 		MKL::MKL
 		TBB::tbb
-		${LIKWID_LIBRRIES}
+		${LIKWID_LIBRARIES}
 		pthread
 		Kokkos::kokkos
 		Kokkos::kokkoskernels)
 
 target_compile_definitions(bachelor_thesis PUBLIC LIKWID_PERFMON)
-
-add_dependencies(bachelor_thesis race_external)
 
 # ---------------------------------------------------------------------------
 # 4.  Executable
