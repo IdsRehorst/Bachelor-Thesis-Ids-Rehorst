@@ -63,7 +63,7 @@ double solver::mklTriSolve(const sparsemat &B, bool lower,
 
 	mkl_sparse_destroy(A);
 
- return tMkl;
+ return tMKL;
 }
 
 //------------------------------------------------------------------------------
