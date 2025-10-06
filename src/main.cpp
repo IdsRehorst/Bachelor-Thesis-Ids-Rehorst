@@ -43,29 +43,29 @@ int main(int argc, char* argv[])
     
     std::vector<std::string> mats = {
         "matrices/3elt/3elt.mtx",
-        "matrices/thermal2/thermal2.mtx",
+        //"matrices/thermal2/thermal2.mtx",
         "matrices/spinSZ12.mm",
-        "matrices/crankseg_1/crankseg_1.mtx",
-        "matrices/F1/F1.mtx",
-        "matrices/Fault_639/Fault_639.mtx",
-        "matrices/nlpkkt200/nlpkkt200.mtx",
-        "matrices/offshore/offshore.mtx",
-        "matrices/pwtk/pwtk.mtx",
-        "matrices/Serena/Serena.mtx",
-        "matrices/ship_003/ship_003.mtx",
-        "matrices/channel-500x100x100-b050/channel-500x100x100-b050.mtx",
-        "matrices/delaunay_n22/delaunay_n22.mtx",
-        "matrices/delaunay_n23/delaunay_n23.mtx",
-        "matrices/delaunay_n24/delaunay_n24.mtx",
-        "matrices/nlpkkt120/nlpkkt120.mtx",
-        "matrices/nlpkkt160/nlpkkt160.mtx",
-        "matrices/G3_circuit/G3_circuit.mtx",
+        //"matrices/crankseg_1/crankseg_1.mtx",
+        //"matrices/F1/F1.mtx",
+        //"matrices/Fault_639/Fault_639.mtx",
+        //"matrices/nlpkkt200/nlpkkt200.mtx",
+        //"matrices/offshore/offshore.mtx",
+        //"matrices/pwtk/pwtk.mtx",
+        //"matrices/Serena/Serena.mtx",
+        //"matrices/ship_003/ship_003.mtx",
+        //"matrices/channel-500x100x100-b050/channel-500x100x100-b050.mtx",
+        //"matrices/delaunay_n22/delaunay_n22.mtx",
+        //"matrices/delaunay_n23/delaunay_n23.mtx",
+        //"matrices/delaunay_n24/delaunay_n24.mtx",
+        //"matrices/nlpkkt120/nlpkkt120.mtx",
+        //"matrices/nlpkkt160/nlpkkt160.mtx",
+        //"matrices/G3_circuit/G3_circuit.mtx",
     	//"matrices/mawi_201512020330/mawi_201512020330.mtx",
-        "matrices/Spielman_k500/Spielman_k500_A_09.mtx"
+        //"matrices/Spielman_k500/Spielman_k500_A_09.mtx"
       };
 
     std::ofstream out(argv[1]);
-    out << "matrix,n,nnz,nzr,t_mkl_ms,t_tasks_ms, t_trilinos_ms, speedup_tasks, speedup_mkl\n";
+    out << "matrix,n,nnz,nzr,t_mkl_ms,t_tasks_ms, t_trilinos_ms, speedup_kokkos, speedup_mkl\n";
 
     for (auto &file : mats) {
         sparsemat A; 
@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
 	std::cout << "Max absolute error: "<< solver::maxAbsError(x2, x3) << std::endl;
 
         double speedup_mkl = t_kokkos / t_mkl;
-	    double speedup_tasks = t_kokkos / t_tasks;
+	double speedup_kokkos = t_kokkos / t_tasks;
 	
         out << file << ","
             << A.n  << ","
@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
             << t_mkl   << ","
             << t_tasks << ","
 	    << t_kokkos << ","
-	    << speedup_tasks << ","
+	    << speedup_kokkos << ","
             << speedup_mkl << "\n";
         std::cout << "Done " << file << "\n";
     }
