@@ -7,9 +7,11 @@ module load gcc
 module load cmake
 module load hwloc
 module load likwid
+module load gdb
 
 module load intel/oneapi-all
 module load kokkos kokkos-kernels
 
-export CMAKE_PREFIX_PATH=/projects/unsupported/install-gcc15/:${CMAKE_PREFIX_PATH}
+export CMAKE_PREFIX_PATH=/projects/unsupported/install-gcc15-Debug/:${CMAKE_PREFIX_PATH}
 export CMAKE_PREFIX_PATH=${MKLROOT}:${CMAKE_PREFIX_PATH}
+export LD_LIBRARY_PATH=${TBBROOT}/lib/intel64/gcc4.8:${LD_LIBRARY_PATH}
