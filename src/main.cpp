@@ -111,12 +111,10 @@ int main(int argc, char* argv[])
         }
         t_mkl   /= K;
         t_tasks /= K;
-	t_kokkos /= K;
-	
-	std::cout << "Max absolute error: "<< solver::maxAbsError(x2, x3) << std::endl;
+		t_kokkos /= K;
 
         double speedup_mkl = t_kokkos / t_mkl;
-	double speedup_kokkos = t_kokkos / t_tasks;
+		double speedup_kokkos = t_kokkos / t_tasks;
 	
         out << file << ","
             << A.n  << ","
